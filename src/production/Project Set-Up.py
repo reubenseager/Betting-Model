@@ -10,7 +10,7 @@ Types of models to look at:
     So, I need a model that can pick out non-linear tendencies. Some possible choices include:
         Random forest (Decision tree ensemble method)
         XGBoost (Gradient boosting ensemble method)
-        Neural Network (Probably overkill)  
+        Neural Network (Keras)  
         SVM (Support Vector Machine)
         Ensemble Method (Combining multiple models together to generate an output)
 
@@ -21,22 +21,35 @@ The features that I will be looking at are:
     Opposition
     Home or Away fixture
     Days since last game
-    Sentiment Analysis (How people are feeling about the team) Depending on if I can get access to twitter
+    Sentiment Analysis (How people are feeling about the team) Depending on if I can get access to twitter with spending money
     Time of Game (Early kick-off, midweek game etc.)
     Formation (maybe not)
     ELO rating (http://clubelo.com/ENG. They have an API that I can use I believe)
+    ELO rating prediction information from (api.clubelo.com/Fixtures. Not sure if this has data for all games)
 
     Rolling team average XG (Expected Goals)
-    Rolling team average PointsPerGame (5 games)
+    Rolling team average XGA (Expected Goals Against)
+    Rolling team average PPG (5 games)
+    Rolling team average PPG Away (PPG Goals Away)
+    Rolling team average PPG Home (Expected Goals Against)
     Rolling team average GS (Goals scored last 5 games)
     Rolling team average GA (Goals conceded last 5 games)
     Rolling team average ST (Shots taken last 5 games)
     Rolling team average SC (Shots conceded last 5 games)
-    Past for against opposing team (Maybe average points over last 5 games or a GS/GA ratio)
+    Past for against opposing team (Average PPG last 5 games against specific opposition)
     Maybe look at some other features that I would engineer myself:
     Money spent in transfer window?
     Transfer window sentiment?
     Star player playing/missing?
+    
+    To evaluate the model I will be using the following metrics:
+        Accuracy (This should be fine as all classes are equally represented and there is no cost to misclassification)
+        Look a probability calibration to see if the model is over or under confident
+        look at outputting some sort of confidence in the prediction. So I know which predictions the model is most confident in.
+        
+    I will also use SHAPELY values to see which features are most important in the model.
+    
+    Finally, I will 
 
 """
 # Setting up the directories for the project

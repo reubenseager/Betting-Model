@@ -90,19 +90,26 @@ for year in years:
 #List all the files in the intermediate folder
 files = os.listdir(intermediate)
 
+#Instantiate the list of dataframes
+all_matches = []
+
 #Append the files together into a single dataframe
 for file in files:
     df = feather.read_feather(f"{intermediate}/{file}")
     all_matches.append(df)  
     
+#Concatenating the elements of the all_matches list together. So joining all the teams match data together
+match_df = pd.concat(all_matches, axis=0) #Axis=0 to specify that we're concatenating column-wise
 
-
-
-# Concatenating the elements of the all_matches list together. So joining all the teams match data together
-match_df = pd.concat(all_matches, axis=0)  # Axis=0 to specify that we're concatenating column-wise
-# Converting the column names to lowercase
-
+#Converting the column names to lowercase
 match_df.columns = [c.lower() for c in match_df.columns]
 
-match_df.to_csv("matches.csv")
+#Removing the columns that we don't need such as time, attendance, referee, comp, round, captain, match report
+match_df = match_df.drop(columns=["time", "attendance", "referee", "comp", "round", "captain", "match report"])
 
+#Writing to a feather file
+feather.write_feather(df=match_df, dest=f"{intermediate}/all_matches.feather")
+
+#Outputting as an Excel file and a csv file in the output folder
+match_df.to_excel(f"{output}/matches.xlsx")
+match_df.to_csv(f"{output}/matches.csv")
