@@ -3,80 +3,34 @@ This script is looking at getting ELO data from clubelo.com. This is a website t
 I will be using an API (Application Programming Interface) to get the data from the website. This is a way of getting data from a website without having to scrape it.
     
 """
-import io # This is a way of reading and writing strings to a buffer (memory) rather than a file
-import requests # This is a way of requesting data from a website
-import pandas as pd # This is a package for data manipulation and analysis
+# Imports
+# Math and data manipulation imports
+import os
+from pathlib import Path
+
+import pandas as pd  # Package for data manipulation and analysis
+import numpy as np # Package for scientific computing
+import lxml 
+import html5lib
+import io
+
+# Web scraping imports
+import requests  # Used to access and download information from websites
+from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
+import time # Package to slow down the webscraping process
+
+import pyarrow.feather as feather   # Package to store dataframes in a binary format
+
+#Project directory locations
+raw = Path.cwd() / "data" / "raw"
+intermediate = Path.cwd() / "data" / "intermediate"
+output = Path.cwd() / "data" / "output"
 
 #Requesting the data from the API
 
 #ELO ranking
 
-#Testing for a single team
-test_team = "Man City"
-elo_request = requests.get("http://api.clubelo.com/ManCity")
-
-#Ideally want to see a 200 response code which means that the request was successful
-print(elo_request.status_code)
-
-#Looking at what the data looks like
-print(elo_request.text)
-
-elo_data = io.StringIO(elo_request.text)
-
-elo_df = pd.read_csv(elo_data, sep=",")
-
-elo_df.tail()
-
-#Checking the data types of the elo_df dataframe
-elo_df.dtypes
-
-#Converting the "From" and "To" date column to a datetime objects
-elo_df["From"] = pd.to_datetime(elo_df["From"])
-elo_df["To"] = pd.to_datetime(elo_df["To"])
-
-#Converting the datetimes to YYYY-MM-DD format
-elo_df["From"] = elo_df["From"].dt.strftime("%Y-%m-%d")
-elo_df["To"] = elo_df["To"].dt.strftime("%Y-%m-%d")
-
-#Filtering the data down to only include 2018 onwards. This should be enough data to train the model on
-elo_df = elo_df[elo_df["From"] >= "2018-01-01"]
-
-
-#Checking the data types of the elo_df dataframe
-elo_df.dtypes
-
-#Converting the columns to lowercase
-elo_df.columns = [c.lower() for c in elo_df.columns]
-
-#Dropping unwanted columns
-elo_df = elo_df.drop(columns=["country", "level", "to"])
-
-#Renaming some of the columns to more user friendly names
-elo_df = elo_df.rename(columns={"from": "date", "rank": "elo_rank", "elo": "elo_points"})
-
-
-#Creating a dataframe with every possible dat between 2018-01-01 and the latest elo date
-all_dates = pd.date_range(start=elo_df["date"].min(), end=elo_df["date"].max(), freq="D")
-
-#Converting the all_dates series to a dataframe and naming the column "date"
-all_dates = pd.DataFrame(all_dates, columns=["date"])
-all_dates["date"] = all_dates["date"].dt.strftime("%Y-%m-%d")
-
-#Joining the all_dates dataframe to the elo_df dataframe
-elo_df_all_dates = all_dates.merge(elo_df, how="left", on="date")
-
-#Interpolate the elo_rank and elo_points columns. Think it's okay to have a linear interpolation here as the data is a time series
-elo_df_all_dates["elo_rank"] = elo_df_all_dates["elo_rank"].interpolate(method="linear")
-elo_df_all_dates["elo_points"] = elo_df_all_dates["elo_points"].interpolate(method="linear")
-
-#If club is null, then fill it with the specific value of club name. (Need to have this as part of the loop variables)
-elo_df_all_dates["club"] = elo_df_all_dates["club"].fillna(value=test_team)
-
-
-
-
 def elo_ratings_function(team_name):
-    
     
     #Requesting the data from the API
     elo_request = requests.get(f"http://api.clubelo.com/{team_name}")
@@ -145,14 +99,15 @@ for team in teams:
         continue
     else:
         elo_ratings_function(team)
+            
+#Concatenating all the elo dataframes together into a single dataframe            
+elo_ratings_all_teams = pd.concat([feather.read_feather(f"{intermediate}/{team}_elo_ratings.feather") for team in teams], axis=0)
 
-#Names of teams in the match_df dataframe and 
-#Find uinique team names in the match_df dataframe and convert to a dataframe with the column name "team"
-match_df_team_names = pd.DataFrame(match_df["team"].unique(), columns=["match_team_names"])
-
-elo_ratings_team_names = pd.DataFrame(teams, columns=["elo_team_names"])
+#Writing the elo_ratings_all_teams dataframe to a feather file
+feather.write_feather(df=elo_ratings_all_teams, dest=f"{intermediate}/elo_ratings_all_teams.feather")
 
 #Attempted fuzzy matching to link the match data to the elo data but didn't work. Used a manual lookup instead.
+# This will need to be updated every season.
 team_name_lookup_dict = {"elo_team_names" : ["ManCity", "Liverpool", "Arsenal", "Newcastle", "ManUnited", 
                                  "Tottenham", "AstonVilla", "Brentford", "Brighton", "WestHam", "Chelsea",
                                  "CrystalPalace", "Fulham", "Wolves", "Burnley", "Everton", "Forest", "Bournemouth",
@@ -171,11 +126,10 @@ team_name_lookup_dict = {"elo_team_names" : ["ManCity", "Liverpool", "Arsenal", 
 
 team_name_lookup_df = pd.DataFrame(team_name_lookup_dict)
 
-#Merging the team_name_lookup_df to the match_df dataframe
-match_df = match_df.merge(team_name_lookup_df, how="left", left_on="team", right_on="match_team_names")
+#Saving the team_name_lookup_df to a feather file
+feather.write_feather(df=team_name_lookup_df, dest=f"{intermediate}/team_name_lookup_df.feather")
 
-#Now merging the elo_df_all_dates dataframe to the match_df dataframe
-match_df = match_df.merge(elo_df_all_dates, how = "left", left_on=["elo_team_names", "date"], right_on=["club", "date"])
+
 
 
 

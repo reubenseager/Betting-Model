@@ -21,7 +21,7 @@ The features that I will be looking at are:
     Opposition
     Home or Away fixture
     Days since last game
-    Sentiment Analysis (How people are feeling about the team) Depending on if I can get access to twitter with spending money
+    Sentiment Analysis (How people are feeling about the teamhttps://www.scraperapi.com/resources/) Depending on if I can get access to twitter with spending money
     Time of Game (Early kick-off, midweek game etc.)
     Formation (maybe not)
     ELO rating (http://clubelo.com/ENG. They have an API that I can use I believe)
@@ -46,7 +46,8 @@ The features that I will be looking at are:
         Accuracy (This should be fine as all classes are equally represented and there is no cost to misclassification)
         Look a probability calibration to see if the model is over or under confident
         look at outputting some sort of confidence in the prediction. So I know which predictions the model is most confident in.
-        
+        To backtest, I will need to access previous odds data. I will then use this to see if the model is profitable. (https://the-odds-api.com/)
+        Possibly also look at a poisson distributin for calculating how many goals will be scored in a game.
     I will also use SHAPELY values to see which features are most important in the model.
     
     Finally, I will 
@@ -55,6 +56,7 @@ The features that I will be looking at are:
 # Setting up the directories for the project
 from pathlib import Path
 import os
+import pandas as pd
 
 # Getting the current working directory and then changing it to the root of the project.
 # If you would like to run this code on your own machine, please change the path to the root of the project
