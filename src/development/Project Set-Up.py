@@ -45,12 +45,14 @@ The features that I will be looking at are:
     To evaluate the model I will be using the following metrics:
         Accuracy (This should be fine as all classes are equally represented and there is no cost to misclassification)
         Look a probability calibration to see if the model is over or under confident
+        Look at plotting ROC and AUC to see how well the model is performing
         look at outputting some sort of confidence in the prediction. So I know which predictions the model is most confident in.
         To backtest, I will need to access previous odds data. I will then use this to see if the model is profitable. (https://the-odds-api.com/)
         Possibly also look at a poisson distributin for calculating how many goals will be scored in a game.
-    I will also use SHAPELY values to see which features are most important in the model.
+        I will also use SHAPELY values to see which features are most important in the model.
     
-    Finally, I will 
+    Finally, I will ceate a web app to display the precitions for the games that weekend, the confidence in the predictions, and the PnL for the season. 
+    It will also display the backtested PnL. (May have to pay for historical odds data)
 
 """
 # Setting up the directories for the project

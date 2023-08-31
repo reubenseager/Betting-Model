@@ -103,18 +103,41 @@ for team in teams:
 #Concatenating all the elo dataframes together into a single dataframe            
 elo_ratings_all_teams = pd.concat([feather.read_feather(f"{intermediate}/{team}_elo_ratings.feather") for team in teams], axis=0)
 
+#Convert the date column to a datetime object in the same format as the match data
+elo_ratings_all_teams["date"] = pd.to_datetime(elo_ratings_all_teams["date"], format="%Y-%m-%d")
+
+ 
+#Fixing some inconsistencies in the team names
+elo_ratings_all_teams["club"] = elo_ratings_all_teams["club"].replace({"AstonVilla": "Aston Villa", 
+                                                                       "ManCity": "Man City", 
+                                                                       "ManUnited": "Man United", 
+                                                                       "CrystalPalace": "Crystal Palace", 
+                                                                       "SheffieldUnited": "Sheffield United", 
+                                                                       "WestBrom": "West Brom", 
+                                                                       "WestHam": "West Ham",
+                                                                       "SheffieldWeds": "Sheffield Weds",
+                                                                       "BristolCity": "Bristol City"})
+
+
+
 #Writing the elo_ratings_all_teams dataframe to a feather file
 feather.write_feather(df=elo_ratings_all_teams, dest=f"{intermediate}/elo_ratings_all_teams.feather")
 
+
+
+
+
 #Attempted fuzzy matching to link the match data to the elo data but didn't work. Used a manual lookup instead.
 # This will need to be updated every season.
-team_name_lookup_dict = {"elo_team_names" : ["ManCity", "Liverpool", "Arsenal", "Newcastle", "ManUnited", 
-                                 "Tottenham", "AstonVilla", "Brentford", "Brighton", "WestHam", "Chelsea",
-                                 "CrystalPalace", "Fulham", "Wolves", "Burnley", "Everton", "Forest", "Bournemouth",
-                                 "SheffieldUnited", "Luton", "Leicester", "Leeds", "Southampton", "Coventry", 
-                                 "Norwich", "WestBrom", "Middlesbrough", "Millwall", "Swansea", "Blackburn", 
-                                 "Sunderland", "Watford", "Preston", "Hull", "Stoke", "BristolCity", "Huddersfield", 
-                                 "Birmingham", "Cardiff", "Ipswich", "Rotherham", "Plymouth", "QPR", "SheffieldWeds"],
+#There are some teams in here twice. THis is because they have multiple names in the elo data. May be a better way of doing this. Like filling the values in with mode
+team_name_lookup_dict = {"elo_team_names" : ["Man City", "Liverpool", "Arsenal", "Newcastle", "Man United", 
+                                 "Tottenham", "Aston Villa", "Brentford", "Brighton", "West Ham", "Chelsea",
+                                 "Crystal Palace", "Fulham", "Wolves", "Burnley", "Everton", "Forest", "Bournemouth",
+                                 "Sheffield United", "Luton", "Leicester", "Leeds", "Southampton", "Coventry", 
+                                 "Norwich", "West Brom", "Middlesbrough", "Millwall", "Swansea", "Blackburn", 
+                                 "Sunderland", "Watford", "Preston", "Hull", "Stoke", "Bristol City", "Huddersfield", 
+                                 "Birmingham", "Cardiff", "Ipswich", "Rotherham", "Plymouth", "QPR", "Sheffield Weds"],
+                         
                          
                          "match_team_names" : ["Manchester City", "Liverpool", "Arsenal", "Newcastle United", "Manchester United",
                                  "Tottenham Hotspur", "Aston Villa", "Brentford", "Brighton and Hove Albion", "West Ham United", "Chelsea",
@@ -123,6 +146,9 @@ team_name_lookup_dict = {"elo_team_names" : ["ManCity", "Liverpool", "Arsenal", 
                                  "Norwich City", "West Bromwich Albion", "Middlesbrough", "Millwall", "Swansea City", "Blackburn Rovers",
                                  "Sunderland", "Watford", "Preston North End", "Hull City", "Stoke City", "Bristol City", "Huddersfield Town",
                                  "Birmingham City", "Cardiff City", "Ipswich Town", "Rotherham United", "Plymouth Argyle", "Queens Park Rangers", "Sheffield Wednesday"]}
+
+
+
 
 team_name_lookup_df = pd.DataFrame(team_name_lookup_dict)
 

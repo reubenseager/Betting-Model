@@ -21,6 +21,7 @@ raw = Path.cwd() / "data" / "raw"
 intermediate = Path.cwd() / "data" / "intermediate"
 output = Path.cwd() / "data" / "output"
 
+#TODO = Need to set this up so it re-reads in the most seasons of data and overwrites the previous data. But leaves the previous seasons alone.
 
 
 # This is the url of the premier league stats page of fbref
