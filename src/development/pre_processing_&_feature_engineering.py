@@ -8,14 +8,15 @@ from pathlib import Path
 
 import pandas as pd  # Package for data manipulation and analysis
 import numpy as np # Package for scientific computing
-import lxml 
-import html5lib
-import io
+import pytest # Package for testing code
 
 # Web scraping imports
 import requests  # Used to access and download information from websites
 from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
 import time # Package to slow down the webscraping process
+import lxml 
+import html5lib
+import io
 
 import pyarrow.feather as feather   # Package to store dataframes in a binary format
 
@@ -37,7 +38,7 @@ output = Path.cwd() / "data" / "output"
 #TODO = Filter to occasions where both the home and away prediction (of the same game) are the same. 
 #TODO = average percentage of stadium capacity filled
 #TODO = Sentiment analysis of twitter data (https://www.scraperapi.com/resources/)
-#TODO = 
+#TODO = Shots conceded last 5 games
 #TODO = 
 #TODO = a
 
@@ -62,6 +63,7 @@ complete_data = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", 
 
 #Dropping the excess name columns
 complete_data = complete_data.drop(columns=["match_team_names", "elo_team_names", "club", "gls"], axis=1,   errors="ignore")
+#complete_data = complete_data.drop(columns=["match_team_names", "elo_team_names", "club", "gls", "index"], axis=1,   errors="ignore")
 
 #Looking at the shape of the data
 complete_data.shape
@@ -83,6 +85,12 @@ complete_data["dist"] = complete_data.groupby("team")["dist"].transform(lambda x
 #Again checking whether there are any missing values in the data
 complete_data.isnull().sum()
 
+#Writing a test to check that there are no missing values in the data. Print out which columns are missing values if there are any (NOT sure if this works or how you use pytest)
+def test_no_missing_values():
+    assert complete_data.isnull().sum().sum() == 0, "There are missing values in the data"
+    
+test_no_missing_values()
+  
 
 #Checking data types. Need numeric data as that is what ML models take as input
 complete_data.dtypes
@@ -102,20 +110,61 @@ complete_data["opponent_code"] = complete_data["opponent"].cat.codes
 complete_data["points"] = complete_data["result"].map({"W":3, "D":1, "L":0})
 
 #Function that will create a rolling average of the data for the last 5 games for each team
-def rolling_average(df, column, window):
-    return df.groupby("team")[column].rolling(window=window, min_periods=1).mean().reset_index(0, drop=True)
-
-#Creating a list of the columns that I want to create rolling averages for
-cols_to_average = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
-
-#Creating new dataframe containing the rolling averages of the columns specifed int cols_to_average
-rolling_averages = [rolling_average(complete_data, col, 5) for col in cols_to_average]
 
 
+def rolling_averages(group, cols, new_cols, window):
+    #Start by sorting the data by date as we are looking at recent form
+    group = group.sort_values(by="date")
+    
+    #Closed = left means that the window will ignore the result of the current game. As we do not want to include future informaion in the model
+    rolling_stats = group[cols].rolling(window = window, closed = "left").mean()
+    group[new_cols] = rolling_stats
+    group = group.dropna()
+    return group
+
+cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
+new_rolling_cols = [f"{col}_rolling" for col in cols_for_rolling]
+
+
+complete_data_rolling = complete_data.groupby("team").apply(lambda x: rolling_averages(x, cols=cols_for_rolling, new_cols=new_rolling_cols, window=5))
+
+#Write code that calculates the rolling averages for each team for the last 5 games for the different venue code types
+
+#Creating some information relating to the difference in form between home and away results
+home_away = complete_data[["date", "team", "venue", "points"]]
+home_away = home_away.sort_values(by="date")
+
+#Create columns called home_ppg and away_ppg that will be the rolling averages of the points column for the last 5 games for each team at home and away. Doing smaller window as games are less frequent
+home_away_rolling_ppg = home_away.groupby(["team", "venue"])["points"].rolling(window=3, closed="left").mean()
+
+#Converting the home_ppg series to a dataframe
+home_away_rolling_ppg = pd.DataFrame(home_away_rolling_ppg).reset_index(level=["team", "venue"])
+
+home_away_rolling_ppg.rename(columns={"points": "home_away_ppg_rolling"}, inplace=True)
+
+#Joining the home_away_rolling_ppg dataframe to the home_away dataframe
+home_away_rolling_ppg = home_away.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
+
+#Merging the home away rolling ppg dataframe to the complete_data dataframe
+#complete_data_rolling = complete_data_rolling.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
+
+#Performance against previous club
+#Here I will be looking at how well the team has done against the previous club over their last 5 max butwill allow just previous fixture fixtures
+
+
+#Dropping the extra index level
+complete_data_rolling = complete_data_rolling.droplevel("team")
+
+#Resetting and then re-assigning the index to ensure we have unique values
+complete_data_rolling.reset_index(drop=True)
+
+#Reassignign the index values as we want to ensure we have unique values
+complete_data_rolling.index = range(len(complete_data_rolling))
+
+#Dropping the non-rolling averaged versions of the rolling columns
+complete_data_rolling = complete_data_rolling.drop(columns=cols_for_rolling, axis=1)
 
 
 
-#Data Quality and Cleaning
-#Checking for null values
-complete_data.isnull().sum()
 
+#Merging all the datasets into a single combined dataset
