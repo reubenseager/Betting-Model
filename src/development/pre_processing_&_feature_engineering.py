@@ -119,7 +119,7 @@ def rolling_averages(group, cols, new_cols, window):
     #Closed = left means that the window will ignore the result of the current game. As we do not want to include future informaion in the model
     rolling_stats = group[cols].rolling(window = window, closed = "left").mean()
     group[new_cols] = rolling_stats
-    group = group.dropna()
+    group = group.dropna() #Might unccoment this and do the dropping of values later on. Just to keep all the datsets the same length
     return group
 
 cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
@@ -128,7 +128,23 @@ new_rolling_cols = [f"{col}_rolling" for col in cols_for_rolling]
 
 complete_data_rolling = complete_data.groupby("team").apply(lambda x: rolling_averages(x, cols=cols_for_rolling, new_cols=new_rolling_cols, window=5))
 
+#Dropping the extra index level
+complete_data_rolling = complete_data_rolling.droplevel("team")
+
+#Resetting and then re-assigning the index to ensure we have unique values
+complete_data_rolling.reset_index(drop=True)
+
+#Reassignign the index values as we want to ensure we have unique values
+complete_data_rolling.index = range(len(complete_data_rolling))
+
+#Dropping the non-rolling averaged versions of the rolling columns
+complete_data_rolling = complete_data_rolling.drop(columns=cols_for_rolling, axis=1)
+
 #Write code that calculates the rolling averages for each team for the last 5 games for the different venue code types
+
+####################################
+#Home/Away Performance
+####################################
 
 #Creating some information relating to the difference in form between home and away results
 home_away = complete_data[["date", "team", "venue", "points"]]
@@ -148,23 +164,35 @@ home_away_rolling_ppg = home_away.merge(home_away_rolling_ppg[["home_away_ppg_ro
 #Merging the home away rolling ppg dataframe to the complete_data dataframe
 #complete_data_rolling = complete_data_rolling.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
 
+####################################
 #Performance against previous club
-#Here I will be looking at how well the team has done against the previous club over their last 5 max butwill allow just previous fixture fixtures
+####################################
+#Here I will be looking at how well the team has done against the previous club over their last 5 max but will allow just previous fixture fixtures. I want to keep the date column as I want to be abel to join by it
 
+rolling_previous_performance_against_club = complete_data[["date", "team", "opponent", "points"]]
 
-#Dropping the extra index level
-complete_data_rolling = complete_data_rolling.droplevel("team")
+rolling_previous_performance_against_club['rolling_previous_performance'] = rolling_previous_performance_against_club.groupby(["team", "opponent"])["points"].transform(lambda x: x.rolling(window=3, min_periods=1, closed="left").mean())
 
-#Resetting and then re-assigning the index to ensure we have unique values
-complete_data_rolling.reset_index(drop=True)
+#Dropping the points column as we no longer need it
+rolling_previous_performance_against_club = rolling_previous_performance_against_club.drop(columns=["points"], axis=1)
 
-#Reassignign the index values as we want to ensure we have unique values
-complete_data_rolling.index = range(len(complete_data_rolling))
+####################################
+#Average ELO of past 5 opponents
+####################################
+rolling_average_elo_of_past_5_opponents = complete_data[["date", "team", "opponent" ,"elo_points"]]
 
-#Dropping the non-rolling averaged versions of the rolling columns
-complete_data_rolling = complete_data_rolling.drop(columns=cols_for_rolling, axis=1)
+opponent_elo_ratings = complete_data[["date", "team", "opponent" ,"elo_points"]]
+
+#Renaming the elo_points column to be opponent_elo_points
+opponent_elo_ratings.rename(columns={"elo_points": "opponent_elo_points"}, inplace=True)
+
+#Merging the opponent_elo_ratings dataframe to the rolling_average_elo_of_past_5_opponents dataframe
+rolling_average_elo_of_past_5_opponents = rolling_average_elo_of_past_5_opponents.merge(opponent_elo_ratings, how="left", left_on=["date", "team", "opponent"], right_on=["date", "team", "opponent"])
+
+rolling_average_elo_of_past_5_opponents["rolling_elo_opponents"] = rolling_average_elo_of_past_5_opponents.groupby("team")["opponent_elo_points"].transform(lambda x: x.rolling(window=5, min_periods=1, closed="left").mean())  
 
 
 
 
 #Merging all the datasets into a single combined dataset
+list_of_dfs = [complete_data_rolling, home_away_rolling_ppg, rolling_previous_performance_against_club]

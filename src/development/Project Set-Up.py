@@ -49,7 +49,7 @@ The features that I will be looking at are:
     Rolling team average GA (Goals conceded last 5 games) Done
     Rolling team average ST (Shots taken last 5 games) Done
     Rolling team average SC (Shots conceded last 5 games) (NEED TO DO)
-    Past for against opposing team (Average PPG last 5 games against specific opposition)
+    Past for against opposing team (Average PPG last 5 games against specific opposition) (Done)
     Average ELO of past 5 opponents
     Maybe look at some other features that I would engineer myself:
     Money spent in transfer window?
