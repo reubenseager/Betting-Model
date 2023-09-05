@@ -9,14 +9,9 @@ from pathlib import Path
 import pandas as pd  # Package for data manipulation and analysis
 import numpy as np # Package for scientific computing
 import pytest # Package for testing code
+from functools import reduce
 
-# Web scraping imports
-import requests  # Used to access and download information from websites
-from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
-import time # Package to slow down the webscraping process
-import lxml 
-import html5lib
-import io
+
 
 import pyarrow.feather as feather   # Package to store dataframes in a binary format
 
@@ -119,7 +114,7 @@ def rolling_averages(group, cols, new_cols, window):
     #Closed = left means that the window will ignore the result of the current game. As we do not want to include future informaion in the model
     rolling_stats = group[cols].rolling(window = window, closed = "left").mean()
     group[new_cols] = rolling_stats
-    group = group.dropna() #Might unccoment this and do the dropping of values later on. Just to keep all the datsets the same length
+    #group = group.dropna() #Might unccoment this and do the dropping of values later on. Just to keep all the datsets the same length
     return group
 
 cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
@@ -161,6 +156,9 @@ home_away_rolling_ppg.rename(columns={"points": "home_away_ppg_rolling"}, inplac
 #Joining the home_away_rolling_ppg dataframe to the home_away dataframe
 home_away_rolling_ppg = home_away.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
 
+#Going to join all dataframes on date and team columns. So need to drop the venue and points columns
+home_away_rolling_ppg.drop(columns=["points", "venue"], axis=1, inplace=True)
+
 #Merging the home away rolling ppg dataframe to the complete_data dataframe
 #complete_data_rolling = complete_data_rolling.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
 
@@ -174,7 +172,7 @@ rolling_previous_performance_against_club = complete_data[["date", "team", "oppo
 rolling_previous_performance_against_club['rolling_previous_performance'] = rolling_previous_performance_against_club.groupby(["team", "opponent"])["points"].transform(lambda x: x.rolling(window=3, min_periods=1, closed="left").mean())
 
 #Dropping the points column as we no longer need it
-rolling_previous_performance_against_club = rolling_previous_performance_against_club.drop(columns=["points"], axis=1)
+rolling_previous_performance_against_club = rolling_previous_performance_against_club.drop(columns=["opponent", "points"], axis=1)
 
 ####################################
 #Average ELO of past 5 opponents
@@ -191,8 +189,23 @@ rolling_average_elo_of_past_5_opponents = rolling_average_elo_of_past_5_opponent
 
 rolling_average_elo_of_past_5_opponents["rolling_elo_opponents"] = rolling_average_elo_of_past_5_opponents.groupby("team")["opponent_elo_points"].transform(lambda x: x.rolling(window=5, min_periods=1, closed="left").mean())  
 
-
-
+#Dropping unwanted columns
+rolling_average_elo_of_past_5_opponents.drop(columns=["opponent", "elo_points", "opponent_elo_points",], axis=1, inplace=True)
 
 #Merging all the datasets into a single combined dataset
-list_of_dfs = [complete_data_rolling, home_away_rolling_ppg, rolling_previous_performance_against_club]
+list_of_dfs = [complete_data_rolling, home_away_rolling_ppg, rolling_previous_performance_against_club, rolling_average_elo_of_past_5_opponents]
+#Left joining each of the dataframes in the extra dataframes in the list to the complete_data_rolling dataframe and saving to new dataframe called all_football_data
+    
+all_football_data = reduce(lambda left,right: pd.merge(left, right, on=["date", "team"]), list_of_dfs)
+
+#Reducing the all_football_data dataframe to only include the columns that we want to use in the model
+cols_for_model = ["date", "elo_rank", "elo_points", "venue_code", "opponent_code", "gf_rolling", "ga_rolling" ,"xg_rolling", "xga_rolling",
+                 "npxg_rolling", "points_rolling", "sh_rolling", "poss_rolling", "sot_rolling", "dist_rolling", "home_away_ppg_rolling", 
+                 "rolling_previous_performance", "rolling_elo_opponents"]
+
+all_football_data = all_football_data[cols_for_model]
+
+#Checking the data types of the all_football_data dataframe
+all_football_data.dtypes
+
+#What do I want to do with opponent code and venue code. Do I just treat them as numbers or is there something else I can do. Look at what other papers have done
