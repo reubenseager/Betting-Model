@@ -34,8 +34,16 @@ output = Path.cwd() / "data" / "output"
 #TODO = average percentage of stadium capacity filled
 #TODO = Sentiment analysis of twitter data (https://www.scraperapi.com/resources/)
 #TODO = Shots conceded last 5 games
-#TODO = 
-#TODO = a
+#TODO = Think about getting rid of the team and opponent code. Not entirely comfortable with having the teams as labels in gthe model. Maybe look with and without it.
+#TODO = Look into using pipeline
+#TODO = Look into having the position of the team in the league as a feature. Maybe add more weight to this feature as the season progresses. So later on in the season theres more weight.
+#TODO = Try ohe the opponent and tyeam in one of the trials. Probably with pipeline to see if it benefits the model.
+#TODO = Once the pipeline is writte, I should probably maybe run it seperately for test and train. Althought this would reduce my data. Also the data preprocessing work on previous data rather than all data
+#TODO = Try different input datastes. FOr example, try with and wihtout ohg, label encoding, removing missing rows in previous club performance, filling them in etc
+#TODO = Look at adding in betting predictors from the different sports books as features in the model.
+#TODO = Elo weighted passed performance of points. 
+#TODO = Do they do well against these types of teams.Group teams on style. Maybe do some clusteirng on teams to find similar
+# pipeline stuff: https://www.freecodecamp.org/news/machine-learning-pipeline/
 
 
 #! = 
@@ -121,6 +129,7 @@ cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "so
 new_rolling_cols = [f"{col}_rolling" for col in cols_for_rolling]
 
 
+#Maybe look at having a minimum winodw of 3 or something here to reduce the number of missing datapoints
 complete_data_rolling = complete_data.groupby("team").apply(lambda x: rolling_averages(x, cols=cols_for_rolling, new_cols=new_rolling_cols, window=5))
 
 #Dropping the extra index level
@@ -169,6 +178,9 @@ home_away_rolling_ppg.drop(columns=["points", "venue"], axis=1, inplace=True)
 
 rolling_previous_performance_against_club = complete_data[["date", "team", "opponent", "points"]]
 
+#Sorting the data by date
+rolling_previous_performance_against_club.sort_values(by="date", ascending=True, inplace=True)
+
 rolling_previous_performance_against_club['rolling_previous_performance'] = rolling_previous_performance_against_club.groupby(["team", "opponent"])["points"].transform(lambda x: x.rolling(window=3, min_periods=1, closed="left").mean())
 
 #Dropping the points column as we no longer need it
@@ -181,11 +193,16 @@ rolling_average_elo_of_past_5_opponents = complete_data[["date", "team", "oppone
 
 opponent_elo_ratings = complete_data[["date", "team", "opponent" ,"elo_points"]]
 
+
+
 #Renaming the elo_points column to be opponent_elo_points
 opponent_elo_ratings.rename(columns={"elo_points": "opponent_elo_points"}, inplace=True)
 
 #Merging the opponent_elo_ratings dataframe to the rolling_average_elo_of_past_5_opponents dataframe
 rolling_average_elo_of_past_5_opponents = rolling_average_elo_of_past_5_opponents.merge(opponent_elo_ratings, how="left", left_on=["date", "team", "opponent"], right_on=["date", "team", "opponent"])
+
+#Sorting by the date as I'm calculating a rolling average
+rolling_average_elo_of_past_5_opponents.sort_values(by="date", ascending=True, inplace=True)
 
 rolling_average_elo_of_past_5_opponents["rolling_elo_opponents"] = rolling_average_elo_of_past_5_opponents.groupby("team")["opponent_elo_points"].transform(lambda x: x.rolling(window=5, min_periods=1, closed="left").mean())  
 
@@ -201,11 +218,71 @@ all_football_data = reduce(lambda left,right: pd.merge(left, right, on=["date", 
 #Reducing the all_football_data dataframe to only include the columns that we want to use in the model
 cols_for_model = ["date", "elo_rank", "elo_points", "venue_code", "opponent_code", "gf_rolling", "ga_rolling" ,"xg_rolling", "xga_rolling",
                  "npxg_rolling", "points_rolling", "sh_rolling", "poss_rolling", "sot_rolling", "dist_rolling", "home_away_ppg_rolling", 
-                 "rolling_previous_performance", "rolling_elo_opponents"]
+                 "rolling_previous_performance", "rolling_elo_opponents", "result"]
 
 all_football_data = all_football_data[cols_for_model]
+
+
+#The rolling_previous_performance column has some null values. This is because the team has not played the opponent before. So I will fill these with the corresponding value from points_rolling column
+all_football_data["rolling_previous_performance"] = all_football_data["rolling_previous_performance"].fillna(all_football_data["points_rolling"])
+all_football_data["home_away_ppg_rolling"] = all_football_data["home_away_ppg_rolling"].fillna(all_football_data["points_rolling"])
+
 
 #Checking the data types of the all_football_data dataframe
 all_football_data.dtypes
 
-#What do I want to do with opponent code and venue code. Do I just treat them as numbers or is there something else I can do. Look at what other papers have done
+#Converting the result column to a categorical variable
+all_football_data["result"] = all_football_data["result"].astype("category")
+
+#Checking the data types of the all_football_data dataframe
+all_football_data.dtypes
+
+#Chcking for missing values in the all_football_data dataframe. There are always going to be some missing values as I am taking rolling averages.
+all_football_data.isnull().sum()
+
+
+#Dropping the columns that have missing values. As this will cause issues for the ML models.
+all_football_data = all_football_data.dropna()
+
+#Chcking for missing values in the all_football_data dataframe. There are always going to be some missing values as I am taking rolling averages.
+all_football_data.isnull().sum()
+
+print(len(all_football_data))
+
+#Writing the all_football_data dataframe to a feather file. This is essentially my input data for the model
+feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data.feather")
+
+
+
+####################################
+#Feature Selection
+####################################
+#TODO = Look at using things like ANOVA to select the best features for the model.
+#TODO = Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
+
+#sklearn-genetic (https://pypi.org/project/sklearn-genetic/)
+
+
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+
+
+#Anova feature selection
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_classif
+
+#Selecting all features
+anova_fs = SelectKBest(score_func=f_classif, k='all')
+
+#Fitting the anova feature selection to the data
+anova_fs.fit(all_football_data.drop(columns=["date", "result"], axis=1), all_football_data["result"])
+
+X_train_anova_fs = anova_fs.transform(all_football_data.drop(columns=["date", "result"], axis=1))
+
+X_test_anova_fs = anova_fs.transform(all_football_data.drop(columns=["date", "result"], axis=1))
+#Creating a dataframe of the anova feature selection sco
+"""
+For attribute selection the following at- tribute evaluators and search methods were used: CfsSubsetEval with BestFirst, ConsistencySubsetEval with BestFirst, WrapperSubsetEval (classifier: Naive- Bayes) with BestFirst
+
+"""

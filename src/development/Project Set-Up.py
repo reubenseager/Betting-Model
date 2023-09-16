@@ -13,7 +13,10 @@ Types of models to look at:
             XGBoost (Gradient boosting ensemble method)
             Neural Network (Keras)  
             SVM (Support Vector Machine)
+            Bayesian Network
+            genetic algorithm (http://ir.mtu.edu.ng/jspui/bitstream/123456789/113/1/an-improved-football-prediction-systempdf.pdf) (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
             Ensemble Method (Combining multiple models together to generate an output)
+            BayesNet(This has had very good performance. According to the paper "Using Bookmaker Odds to Predict Football Outcomes" paper)
             Optuna (Hyperparameter tuning)
             looking into predict_proba() to get a probability distribution for each class
             https://towardsdatascience.com/pythons-predict-proba-doesn-t-actually-predict-probabilities-and-how-to-fix-it-f582c21d63fc
@@ -55,6 +58,9 @@ The features that I will be looking at are:
     Money spent in transfer window?
     Transfer window sentiment?
     Star player playing/missing?
+    
+    Feature Selection:
+        ANOVA Featuyre selection (file:///Users/reubenseager/Downloads/10.51354-mj)
     
     To evaluate the model I will be using the following metrics:
         Accuracy (This should be fine as all classes are equally represented and there is no cost to misclassification)
