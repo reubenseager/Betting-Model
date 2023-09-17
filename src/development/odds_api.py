@@ -1,6 +1,12 @@
 import requests  # Used to access and download information from websites
 import json  # Used to convert json data into python dictionaries
 from functools import reduce  # Used to merge multiple dataframes together
+import pandas as pd
+
+
+
+
+#TODO= May need to create the inverse of the games so I have the data for both teams in the game
 
 # An api key is emailed to you when you sign up to a plan
 # Get a free API key at https://api.the-odds-api.com/
@@ -107,7 +113,7 @@ odds_df = odds_df.drop(columns=["Bookmaker"])
 
 match_odds_list = []
 for game in odds_json:   
-    game = odds_json[0]
+    #game = odds_json[0]
     #Extracting the game data from dictionary for each of the games
     home_team = game['home_team']
     away_team = game['away_team']
@@ -120,8 +126,10 @@ for game in odds_json:
     bookmaker_odds_list = []
     
     for bookmaker in bookmakers:
-        bookmaker = bookmakers[0]
+        #bookmaker = bookmakers[0]
         
+        #Extracting the bookmaker name
+        bookmaker_name = bookmaker['title']
         odds = bookmaker['markets'][0]['outcomes']
         for odd in odds:
             if odd['name'] == home_team:
@@ -152,59 +160,5 @@ for game in odds_json:
     match_odds_list.append(all_bookmaker_odds)  
     
 
-
-
-
-
-
-
-
-
-
-
-
-
-def flatten_dict(d, parent_key='', sep='_'):
-    items = {}
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.update(flatten_dict(v, new_key, sep=sep))
-        elif isinstance(v, list):
-            for i, item in enumerate(v):
-                items.update(flatten_dict(item, f"{new_key}{sep}{i}", sep=sep))
-        else:
-            items[new_key] = v
-    return items
-
-flat_data = flatten_dict(data)
-
-# Extract and create separate columns for commence_time, home_team, and away_team
-df = pd.DataFrame([flat_data])
-
-for i 
-
-
-df['commence_time'] = pd.to_datetime(df['commence_time'])
-commence_time = df['commence_time'][0]
-home_team = df['home_team']
-away_team = df['away_team'][0]
-
-# View the titles of all the bookmakers
-bookmakers = [bookmaker['title'] for bookmaker in data['bookmakers']]
-
-# Create a DataFrame for bookmaker titles
-bookmaker_df = pd.DataFrame({'Bookmaker Titles': bookmakers})
-
-# Display the DataFrame
-print(f"Commence Time: {commence_time}")
-print(f"Home Team: {home_team}")
-print(f"Away Team: {away_team}")
-print("\nBookmaker Titles:")
-print(bookmaker_df)
-This code will create separate columns for commence_time, home_team, and away_team in the df DataFrame and also display the titles of all the bookmakers in a separate DataFrame bookmaker_df. Adjustments are made to extract the required data for these columns and bookmaker titles.
-
-
-
-
-
+#Concatenating all the match odds dataframes together
+all_match_odds = pd.concat(match_odds_list, ignore_index=True, axis=0, sort=False)
