@@ -46,20 +46,51 @@ output = Path.cwd() / "data" / "output"
 # pipeline stuff: https://www.freecodecamp.org/news/machine-learning-pipeline/
 
 
-#! = 
+#! = Need to have all results for both the home and away team on a single line I think. So just copy all the information that could be attributed ot both, like recent form, xg for last 5 games, maybe an xg diff for and away for tht last few games for both home and away team (https://medium.com/codex/football-analytics-using-bayesian-network-for-analyzing-xg-expected-goals-705e63e597c2)
 
 #The web scraping and ELO ratings scripts shouldn't need to be run more than once. I should be able to work from this script only.
 
-#Start by loading the match data,  elo data and team name lookup data
+#Start by loading the match data, elo data, historical betting data, current betting data, and team naming data. These will be joined together using the home team name, away team name and date columns.
 elo_ratings_all_teams = pd.read_feather(f"{intermediate}/elo_ratings_all_teams.feather")
 match_data_all_teams  = pd.read_feather(f"{intermediate}/match_data_all_teams.feather")
-team_name_lookup_df = pd.read_feather(f"{intermediate}/team_name_lookup_df.feather")
+historical_betting_all_teams = pd.read_feather(f"{intermediate}/all_historical_betting_data.feather")
+#current_betting_all_teams = pd.read_feather(f"{intermediate}/all_current_betting_data.feather")
+
+team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
+
 
 #Joining datasets together into a single combined dataframe (Can add more datasets to this later on)
 
 
-#Merging the team_name_lookup_df to the match_df dataframe
-match_data_all_teams = match_data_all_teams.merge(team_name_lookup_df, how="left", left_on="team", right_on="match_team_names")
+#Merging the team_name_lookup_df to the match_df dataframe (Should probably move this to the web scraping script eventually)
+match_data_all_teams = match_data_all_teams.merge(team_name_lookup, how="left", left_on="team", right_on="alternate_name")
+match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "home_team_full_name"})
+
+match_data_all_teams = match_data_all_teams.merge(team_name_lookup, how="left", left_on="opponent", right_on="alternate_name")
+match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "away_team_full_name"})
+
+#Removing duplicate rows
+match_data_all_teams = match_data_all_teams.drop_duplicates()
+
+
+#Testing that there are no NaN values in the data
+match_data_all_teams[["home_team_full_name", "away_team_full_name"]].isnull().sum()
+
+#Drop the team and opponent columns as they are no longer needed
+match_data_all_teams = match_data_all_teams.drop(columns=["team", "opponent"])
+
+#Renaming the team names to the full team names that all the other datasets use in the elo_ratings_all_teams dataframe
+elo_ratings_all_teams = elo_ratings_all_teams.merge(team_name_lookup, how="left", left_on="club", right_on="alternate_name")
+
+#dropping elo_rank as it basically provides same info as elo_points
+elo_ratings_all_teams = elo_ratings_all_teams.drop(columns=["elo_rank", "club", "alternate_name"]).rename(columns={"correct_name": "elo_team_name"})
+
+#Testing that there are no NaN values in the data
+elo_ratings_all_teams.isnull().sum()
+
+
+
+
 
 #Now merging the elo_df_all_dates dataframe to the match_df dataframe
 complete_data = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["elo_team_names", "date"], right_on=["club", "date"])
@@ -261,8 +292,8 @@ feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_d
 #TODO = Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
 
 #sklearn-genetic (https://pypi.org/project/sklearn-genetic/)
-
-
+https://sklearn-genetic.readthedocs.io/en/latest/api.html#genetic_selection.GeneticSelectionCV
+https://www.kaggle.com/code/tanmayunhale/genetic-algorithm-for-feature-selection
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
