@@ -292,8 +292,8 @@ feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_d
 #TODO = Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
 
 #sklearn-genetic (https://pypi.org/project/sklearn-genetic/)
-https://sklearn-genetic.readthedocs.io/en/latest/api.html#genetic_selection.GeneticSelectionCV
-https://www.kaggle.com/code/tanmayunhale/genetic-algorithm-for-feature-selection
+#https://sklearn-genetic.readthedocs.io/en/latest/api.html#genetic_selection.GeneticSelectionCV
+#https://www.kaggle.com/code/tanmayunhale/genetic-algorithm-for-feature-selection
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
