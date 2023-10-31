@@ -102,6 +102,6 @@ elo_ratings_all_teams["club"] = elo_ratings_all_teams["club"].replace({"AstonVil
 
 
 #Writing the elo_ratings_all_teams dataframe to a feather file
-feather.write_feather(df=elo_ratings_all_teams, dest=f"{intermediate}/elo_ratings_all_teams.feather")
+feather.write_feather(df=elo_ratings_all_teams, dest=f"{elo_data_folder}/elo_ratings_all_teams.feather")
 
 print("ELO ratings data created successfully!")

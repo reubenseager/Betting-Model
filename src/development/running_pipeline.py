@@ -71,3 +71,17 @@ import pytz
 with open(Path.cwd()/"src"/"development"/"odds_api_module.py") as f:
     code = compile(f.read(), 'odds_api_module.py', 'exec')
     exec(code)
+
+
+####################################################################################
+#Webscraping Football Data
+####################################################################################
+#Imports
+from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
+
+
+with open(Path.cwd()/"src"/"development"/"webscraping_data_module.py") as f:
+    code = compile(f.read(), 'webscraping_data_module.py', 'exec')
+    exec(code)
+    
+
