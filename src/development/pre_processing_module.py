@@ -68,20 +68,31 @@ team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
 
 #Merging the team_name_lookup_df to the match_df dataframe (Should probably move this to the web scraping script eventually)
 match_data_all_teams = match_data_all_teams.merge(team_name_lookup, how="left", left_on="team", right_on="alternate_name")
-match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "home_team_full_name"})
+match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "team_full_name"})
 
 match_data_all_teams = match_data_all_teams.merge(team_name_lookup, how="left", left_on="opponent", right_on="alternate_name")
-match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "away_team_full_name"})
+match_data_all_teams = match_data_all_teams.drop(columns=["alternate_name"]).rename(columns={"correct_name": "opponent_full_name"})
 
 #Removing duplicate rows
 match_data_all_teams = match_data_all_teams.drop_duplicates()
 
 
 #Testing that there are no NaN values for the team names in the data
-match_data_all_teams[["home_team_full_name", "away_team_full_name"]].isnull().sum()
+match_data_all_teams[["team_full_name", "opponent_full_name"]].isnull().sum()
 
 #Drop the team and opponent columns as they are no longer needed
 match_data_all_teams = match_data_all_teams.drop(columns=["team", "opponent"])
+
+#Creating a unique game id column that includes date, team and opponent
+match_data_all_teams["game_id"] = match_data_all_teams.apply(
+    lambda row: (
+        str(row["date"]) + "_" + row["team_full_name"] + "_" + row["opponent_full_name"]
+        if row["venue"] == "Home"
+        else str(row["date"]) + "_" + row["opponent_full_name"] + "_" + row["team_full_name"]
+    ),
+    axis=1
+)
+
 
 #Renaming the team names to the full team names that all the other datasets use in the elo_ratings_all_teams dataframe
 elo_ratings_all_teams = elo_ratings_all_teams.merge(team_name_lookup, how="left", left_on="club", right_on="alternate_name")
@@ -98,8 +109,8 @@ elo_ratings_all_teams.isnull().sum()
 
 
 #Now merging the elo_df_all_dates dataframe to the match_df dataframe
-match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["home_team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "home_team_elo_points"}).drop(columns=["elo_team_name"])
-match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["away_team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "away_team_elo_points"}).drop(columns=["elo_team_name"])
+match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "team_elo_points"}).drop(columns=["elo_team_name"])
+match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["opponent_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "opponent_elo_points"}).drop(columns=["elo_team_name"])
 
 
 #Dropping any duplicate rows
@@ -118,43 +129,39 @@ match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day", 
 #Data Cleaning & Feature Engineering
 
 #SHould probably do some checks for null values in the data. Should also probably do some plots to see if there are any outliers in the data
-complete_data.isnull().sum()
+match_data_all_teams.isnull().sum()
 
 #Do some type of pytest here to check that the data is in the correct format
 
 #If dist is missing and has a nan value, then fill it with the highest value for that team. This is because dist being nan means the team has had no shots. Which should be punished by the model
-complete_data["dist"] = complete_data.groupby("team")["dist"].transform(lambda x: x.fillna(x.max()))
+match_data_all_teams["dist"] = match_data_all_teams.groupby("team_full_name")["dist"].transform(lambda x: x.fillna(x.max()))
 
 #Again checking whether there are any missing values in the data
-complete_data.isnull().sum()
+match_data_all_teams.isnull().sum()
 
 #Writing a test to check that there are no missing values in the data. Print out which columns are missing values if there are any (NOT sure if this works or how you use pytest)
 def test_no_missing_values():
-    assert complete_data.isnull().sum().sum() == 0, "There are missing values in the data"
+    assert match_data_all_teams.isnull().sum().sum() == 0, "There are missing values in the data"
     
 test_no_missing_values()
   
 
 #Checking data types. Need numeric data as that is what ML models take as input
-complete_data.dtypes
-
-#Dropping some more columns. Need to reevaluate this later on
-complete_data = complete_data.drop(columns=["comp","day"], axis=1,   errors="ignore")
+match_data_all_teams.dtypes
 
 #Converting venue into a numeric coded variable
-complete_data["venue"] = complete_data["venue"].astype("category")
-complete_data["venue_code"] = complete_data["venue"].cat.codes
+# complete_data["venue"] = complete_data["venue"].astype("category")
+# complete_data["venue_code"] = complete_data["venue"].cat.codes
 
 #Creating a code for the opponent column
-complete_data["opponent"] = complete_data["opponent"].astype("category")
-complete_data["opponent_code"] = complete_data["opponent"].cat.codes
+# complete_data["opponent"] = complete_data["opponent"].astype("category")
+# complete_data["opponent_code"] = complete_data["opponent"].cat.codes
 
 #Creating a points column where a W is 3 points, a D is 1 point and a L is 0 points
-complete_data["points"] = complete_data["result"].map({"W":3, "D":1, "L":0})
+match_data_all_teams["points"] = match_data_all_teams["result"].map({"W":3, "D":1, "L":0})
 
 #Function that will create a rolling average of the data for the last 5 games for each team
-
-
+#TODO = Maybe look at having a minimum winodw of 3 or something here to reduce the number of missing datapoints
 def rolling_averages(group, cols, new_cols, window):
     #Start by sorting the data by date as we are looking at recent form
     group = group.sort_values(by="date")
@@ -170,90 +177,50 @@ new_rolling_cols = [f"{col}_rolling" for col in cols_for_rolling]
 
 
 #Maybe look at having a minimum winodw of 3 or something here to reduce the number of missing datapoints
-complete_data_rolling = complete_data.groupby("team").apply(lambda x: rolling_averages(x, cols=cols_for_rolling, new_cols=new_rolling_cols, window=5))
+match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lambda x: rolling_averages(x, cols=cols_for_rolling, new_cols=new_rolling_cols, window=5))
 
 #Dropping the extra index level
-complete_data_rolling = complete_data_rolling.droplevel("team")
+match_data_all_teams = match_data_all_teams.droplevel("team_full_name")
 
 #Resetting and then re-assigning the index to ensure we have unique values
-complete_data_rolling.reset_index(drop=True)
+match_data_all_teams.reset_index(drop=True)
 
-#Reassignign the index values as we want to ensure we have unique values
-complete_data_rolling.index = range(len(complete_data_rolling))
 
 #Dropping the non-rolling averaged versions of the rolling columns
-complete_data_rolling = complete_data_rolling.drop(columns=cols_for_rolling, axis=1)
-
-#Write code that calculates the rolling averages for each team for the last 5 games for the different venue code types
+match_data_all_teams = match_data_all_teams.drop(columns=cols_for_rolling, axis=1)
 
 ####################################
 #Home/Away Performance
 ####################################
+#This only creates one column that contains the home/away form based on whatever the value is in the venue column.
 
-#Creating some information relating to the difference in form between home and away results
-home_away = complete_data[["date", "team", "venue", "points"]]
-home_away = home_away.sort_values(by="date")
+match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "venue"]).apply(lambda x: rolling_averages(x, cols=["points"], new_cols=["venue_points"], window=3)).droplevel(["team_full_name", "venue"])
 
-#Create columns called home_ppg and away_ppg that will be the rolling averages of the points column for the last 5 games for each team at home and away. Doing smaller window as games are less frequent
-home_away_rolling_ppg = home_away.groupby(["team", "venue"])["points"].rolling(window=3, closed="left").mean()
-
-#Converting the home_ppg series to a dataframe
-home_away_rolling_ppg = pd.DataFrame(home_away_rolling_ppg).reset_index(level=["team", "venue"])
-
-home_away_rolling_ppg.rename(columns={"points": "home_away_ppg_rolling"}, inplace=True)
-
-#Joining the home_away_rolling_ppg dataframe to the home_away dataframe
-home_away_rolling_ppg = home_away.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
-
-#Going to join all dataframes on date and team columns. So need to drop the venue and points columns
-home_away_rolling_ppg.drop(columns=["points", "venue"], axis=1, inplace=True)
-
-#Merging the home away rolling ppg dataframe to the complete_data dataframe
-#complete_data_rolling = complete_data_rolling.merge(home_away_rolling_ppg[["home_away_ppg_rolling"]], how="left", left_index=True, right_index=True)
 
 ####################################
 #Performance against previous club
 ####################################
 #Here I will be looking at how well the team has done against the previous club over their last 5 max but will allow just previous fixture fixtures. I want to keep the date column as I want to be abel to join by it
 
-rolling_previous_performance_against_club = complete_data[["date", "team", "opponent", "points"]]
-
-#Sorting the data by date
-rolling_previous_performance_against_club.sort_values(by="date", ascending=True, inplace=True)
-
-rolling_previous_performance_against_club['rolling_previous_performance'] = rolling_previous_performance_against_club.groupby(["team", "opponent"])["points"].transform(lambda x: x.rolling(window=3, min_periods=1, closed="left").mean())
-
-#Dropping the points column as we no longer need it
-rolling_previous_performance_against_club = rolling_previous_performance_against_club.drop(columns=["opponent", "points"], axis=1)
+match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "opponent_full_name"]).apply(lambda x: rolling_averages(x, cols=["points"], new_cols=["points_against_opponent"], window=2)).droplevel(["team_full_name", "opponent_full_name"])
 
 ####################################
 #Average ELO of past 5 opponents
 ####################################
-rolling_average_elo_of_past_5_opponents = complete_data[["date", "team", "opponent" ,"elo_points"]]
+#This should help give some context to the team's recent form. As if they have been playing against teams with a high elo rating, then their points are likely to be lower.
 
-opponent_elo_ratings = complete_data[["date", "team", "opponent" ,"elo_points"]]
+match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lambda x: rolling_averages(x, cols=["opponent_elo_points"], new_cols=["average_opponent_elo"], window=5)).droplevel("team_full_name")
 
+historical_betting_all_teams["game_id"] = historical_betting_all_teams.apply(
+    lambda row: (
+        str(row["date"]) + "_" + row["home_team_full_name"] + "_" + row["away_team_full_name"]), axis=1
+)
 
+match_data_all_teams = match_data_all_teams.merge(historical_betting_all_teams[[col for col in historical_betting_all_teams.columns if col != "date"]], 
+                                  how = "left", 
+                                  left_on=["team_full_name", "opponent_full_name" ,"game_id"], 
+                                  right_on=["home_team_full_name", "away_team_full_name" ,"game_id"]).drop(columns=["home_team_full_name", "away_team_full_name"]])
 
-#Renaming the elo_points column to be opponent_elo_points
-opponent_elo_ratings.rename(columns={"elo_points": "opponent_elo_points"}, inplace=True)
-
-#Merging the opponent_elo_ratings dataframe to the rolling_average_elo_of_past_5_opponents dataframe
-rolling_average_elo_of_past_5_opponents = rolling_average_elo_of_past_5_opponents.merge(opponent_elo_ratings, how="left", left_on=["date", "team", "opponent"], right_on=["date", "team", "opponent"])
-
-#Sorting by the date as I'm calculating a rolling average
-rolling_average_elo_of_past_5_opponents.sort_values(by="date", ascending=True, inplace=True)
-
-rolling_average_elo_of_past_5_opponents["rolling_elo_opponents"] = rolling_average_elo_of_past_5_opponents.groupby("team")["opponent_elo_points"].transform(lambda x: x.rolling(window=5, min_periods=1, closed="left").mean())  
-
-#Dropping unwanted columns
-rolling_average_elo_of_past_5_opponents.drop(columns=["opponent", "elo_points", "opponent_elo_points",], axis=1, inplace=True)
-
-#Merging all the datasets into a single combined dataset
-list_of_dfs = [complete_data_rolling, home_away_rolling_ppg, rolling_previous_performance_against_club, rolling_average_elo_of_past_5_opponents]
-#Left joining each of the dataframes in the extra dataframes in the list to the complete_data_rolling dataframe and saving to new dataframe called all_football_data
-    
-all_football_data = reduce(lambda left,right: pd.merge(left, right, on=["date", "team"]), list_of_dfs)
 
 #Reducing the all_football_data dataframe to only include the columns that we want to use in the model
 cols_for_model = ["date", "elo_rank", "elo_points", "venue_code", "opponent_code", "gf_rolling", "ga_rolling" ,"xg_rolling", "xga_rolling",
