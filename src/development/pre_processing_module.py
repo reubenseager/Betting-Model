@@ -187,8 +187,8 @@ match_data_all_teams.reset_index(drop=True)
 
 
 #Dropping the non-rolling averaged versions of the rolling columns
-match_data_all_teams = match_data_all_teams.drop(columns=cols_for_rolling, axis=1)
-
+cols_to_drop = [col for col in cols_for_rolling if col != "points"]
+match_data_all_teams = match_data_all_teams.drop(columns=cols_to_drop, axis=1)
 ####################################
 #Home/Away Performance
 ####################################
@@ -198,9 +198,10 @@ match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "venue"])
 
 
 ####################################
-#Performance against previous club
+#Previous performance against opponent
 ####################################
-#Here I will be looking at how well the team has done against the previous club over their last 5 max but will allow just previous fixture fixtures. I want to keep the date column as I want to be abel to join by it
+#Here I will be looking at how well the team has done against the previous club over their last 5 max but will allow just previous fixture fixtures.
+#Maybe also look at this home and away but only for the most recent game 
 
 match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "opponent_full_name"]).apply(lambda x: rolling_averages(x, cols=["points"], new_cols=["points_against_opponent"], window=2)).droplevel(["team_full_name", "opponent_full_name"])
 
@@ -219,20 +220,49 @@ historical_betting_all_teams["game_id"] = historical_betting_all_teams.apply(
 match_data_all_teams = match_data_all_teams.merge(historical_betting_all_teams[[col for col in historical_betting_all_teams.columns if col != "date"]], 
                                   how = "left", 
                                   left_on=["team_full_name", "opponent_full_name" ,"game_id"], 
-                                  right_on=["home_team_full_name", "away_team_full_name" ,"game_id"]).drop(columns=["home_team_full_name", "away_team_full_name"]])
+                                  right_on=["home_team_full_name", "away_team_full_name" ,"game_id"]).drop(columns=["home_team_full_name", "away_team_full_name"])
 
 
 #Reducing the all_football_data dataframe to only include the columns that we want to use in the model
-cols_for_model = ["date", "elo_rank", "elo_points", "venue_code", "opponent_code", "gf_rolling", "ga_rolling" ,"xg_rolling", "xga_rolling",
-                 "npxg_rolling", "points_rolling", "sh_rolling", "poss_rolling", "sot_rolling", "dist_rolling", "home_away_ppg_rolling", 
-                 "rolling_previous_performance", "rolling_elo_opponents", "result"]
+# cols_for_model = ["date", "elo_rank", "elo_points", "venue_code", "opponent_code", "gf_rolling", "ga_rolling" ,"xg_rolling", "xga_rolling",
+#                  "npxg_rolling", "points_rolling", "sh_rolling", "poss_rolling", "sot_rolling", "dist_rolling", "home_away_ppg_rolling", 
+#                  "rolling_previous_performance", "rolling_elo_opponents", "result"]
 
-all_football_data = all_football_data[cols_for_model]
+# match_data_all_teams = match_data_all_teams[cols_for_model]
 
 
 #The rolling_previous_performance column has some null values. This is because the team has not played the opponent before. So I will fill these with the corresponding value from points_rolling column
-all_football_data["rolling_previous_performance"] = all_football_data["rolling_previous_performance"].fillna(all_football_data["points_rolling"])
-all_football_data["home_away_ppg_rolling"] = all_football_data["home_away_ppg_rolling"].fillna(all_football_data["points_rolling"])
+#Not actually sure if this is somethign I should do. As its adding information to the model that doesn't exist in real life but may be dropping too many rows if I don't do this.
+#all_football_data["rolling_previous_performance"] = all_football_data["rolling_previous_performance"].fillna(all_football_data["points_rolling"])
+#all_football_data["home_away_ppg_rolling"] = all_football_data["home_away_ppg_rolling"].fillna(all_football_data["points_rolling"])
+
+
+#Creating a dataset that contains the home and away data for a match on the same row
+
+#These are the columns that will be used for the home and away teams
+home_and_away_cols = ["team_full_name", "gf_rolling", "ga_rolling", "xg_rolling", "xga_rolling", "npxg_rolling", "points_rolling", "sh_rolling",
+                      "poss_rolling", "sot_rolling", "dist_rolling", "team_elo_points" ,"points_against_opponent", "average_opponent_elo", "venue_points"]
+
+#These are the betting columns. They include information for both the home and away teams
+betting_cols = [col for col in match_data_all_teams.columns if col.startswith("odds_")]
+
+
+#Creating a dataframe that contains the home team data (Also including the results column)
+home_team_data = match_data_all_teams[match_data_all_teams["venue"] == "Home"][["date", "game_id", "result"] + home_and_away_cols]
+
+#renaming the columns to include the home suffix
+home_team_data = home_team_data.rename(columns={col: f"{col}_home_team" for col in home_and_away_cols})
+
+#Doing the same for the away team data. But not including the result column as this i in the home team data
+away_team_data = match_data_all_teams[match_data_all_teams["venue"] == "Away"][["date", "game_id"] + home_and_away_cols]
+
+away_team_data = away_team_data.rename(columns={col: f"{col}_away_team" for col in home_and_away_cols})
+
+betting_data = match_data_all_teams[match_data_all_teams["venue"] == "Home"][["date", "game_id"] + betting_cols]
+
+
+#Merging all the data together using reduce
+all_football_data = reduce(lambda left, right: pd.merge(left, right, on=["date", "game_id"]), [home_team_data, away_team_data, betting_data])
 
 
 #Checking the data types of the all_football_data dataframe

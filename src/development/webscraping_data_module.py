@@ -31,9 +31,11 @@ webscraped_football_data_folder = Path(intermediate, "webscraped_football_data")
 
 #TODO = Need to set this up so it re-reads in the most seasons of data and overwrites the previous data. But leaves the previous seasons alone.
 
-#Year Variables
+#Year Variables (getting extra data as I don't think I have enough if only looking back three years)
 latest_year = 2024
-earlist_year = 2020
+# earlist_year = 2020
+earlist_year = 2017 #Theres no npxg at some point back in the data so will probs notread it in
+
 
 reread_data = True #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
 
@@ -53,7 +55,7 @@ shooting_features = ["Date", "Gls" ,"Sh", "SoT", "Dist", "npxG"]
 for year in years:
     
     data = requests.get(standings_url)
-    soup = BeautifulSoup(data.text)
+    soup = BeautifulSoup(data.text, features="lxml")
     standings_table = soup.select("table.stats_table")[0]  # Extracting the information relating to the table of data
 
     links = [link.get("href") for link in standings_table.find_all("a")]  # href attribute specifies the URL of the page the link goes to
@@ -70,7 +72,7 @@ for year in years:
         matches = pd.read_html(data.text, match="Scores & Fixtures", flavor = 'html5lib')[0]
 
         # Getting the shooting stats info
-        soup = BeautifulSoup(data.text)
+        soup = BeautifulSoup(data.text, features="lxml")
         links = [link.get("href") for link in soup.find_all("a")]
         links = [link for link in links if link and "/all_comps/shooting/" in link]  # This only extracts the squads links rather than player information. The if l checks whether the l string is none empy i.e truthy which stops the code throwing errors.
         data = requests.get(f"https://fbref.com{links[0]}")  # Converting the urls to absolute urls
