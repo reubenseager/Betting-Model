@@ -8,6 +8,9 @@ I will be using an API (Application Programming Interface) to get the data from 
 
 # import os
 # from pathlib import Path
+#Start Date
+start_date = "2017-01-01"
+
 
 # Create a new directory called "dat" within the "intermediate" folder
 Path(intermediate, "elo_data").mkdir(exist_ok=True)
@@ -33,7 +36,7 @@ def elo_ratings_function(team_name):
     elo_df["From"] = elo_df["From"].dt.strftime("%Y-%m-%d")
 
     #Filtering the data down to only include 2018 onwards. This matches the dates for the match data information
-    elo_df = elo_df[elo_df["From"] >= "2018-01-01"]
+    elo_df = elo_df[elo_df["From"] >= start_date]
 
     #Converting the columns to lowercase
     elo_df.columns = [c.lower() for c in elo_df.columns]

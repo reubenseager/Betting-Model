@@ -10,7 +10,7 @@ import pandas as pd  # Package for data manipulation and analysis
 import numpy as np # Package for scientific computing
 import pytest # Package for testing code
 from functools import reduce
-
+from datetime import datetime
 import pyarrow.feather as feather   # Package to store dataframes in a binary format
 
 os.getcwd()
@@ -60,8 +60,11 @@ match_data_all_teams  = pd.read_feather(f"{webscraped_football_data_folder}/matc
 historical_betting_all_teams = pd.read_feather(f"{historical_betting_odds}/all_historical_betting_data.feather")
 live_betting_all_teams = pd.read_feather(f"{live_betting_odds_folder}/all_match_odds.feather")
 
-team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
+#Converting the date column to a datetime object
+historical_betting_all_teams["date"]= historical_betting_all_teams["date"].apply(lambda x: x.date())
+elo_ratings_all_teams["date"]= elo_ratings_all_teams["date"].apply(lambda x: x.date())
 
+team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
 
 #Joining datasets together into a single combined dataframe (Can add more datasets to this later on)
 
@@ -82,6 +85,8 @@ match_data_all_teams[["team_full_name", "opponent_full_name"]].isnull().sum()
 
 #Drop the team and opponent columns as they are no longer needed
 match_data_all_teams = match_data_all_teams.drop(columns=["team", "opponent"])
+
+match_data_all_teams['date'] = match_data_all_teams['date'].apply(lambda x: x.date())
 
 #Creating a unique game id column that includes date, team and opponent
 match_data_all_teams["game_id"] = match_data_all_teams.apply(
@@ -118,7 +123,7 @@ match_data_all_teams = match_data_all_teams.drop_duplicates()
 
 
 #Dropping the excess name columns
-match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day", "season"], axis=1,   errors="ignore")
+match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day"], axis=1,   errors="ignore")
 #complete_data = complete_data.drop(columns=["match_team_names", "elo_team_names", "club", "gls", "index"], axis=1,   errors="ignore")
 
 
@@ -159,6 +164,33 @@ match_data_all_teams.dtypes
 
 #Creating a points column where a W is 3 points, a D is 1 point and a L is 0 points
 match_data_all_teams["points"] = match_data_all_teams["result"].map({"W":3, "D":1, "L":0})
+
+
+
+####################################
+#Current league position
+####################################
+#Possibly look at including some type of gameweek value in there. SO that closer to the end of the season, the model gives more weight to the current league position
+
+#Calculating the cumulative points for each team up to the current game by season
+match_data_all_teams["cumulative_points"] = match_data_all_teams.groupby(["team_full_name", "season"])["points"].cumsum()
+
+#Creating a gameweek column. This is the number of games that the team has played in the season. The +1 is there because the first game of the season is gameweek 1 not 0
+match_data_all_teams["gameweek"] = match_data_all_teams.groupby(["team_full_name", "season"])["points"].cumcount() + 1
+
+#Creating a current league position column. This the the rank of cumulative points for the specific gameweek and season. If there are two teams with the same number of points, then I'm just giving them the same league position
+match_data_all_teams["current_league_position"] = match_data_all_teams.groupby(["season", "gameweek"])["cumulative_points"].rank(ascending=False, method="min", pct=False, na_option="keep") 
+
+#Creating a "weighted" current league position column. This gives more weight to positions that are later on in the season
+match_data_all_teams["weighted_league_position"] = ((20 - match_data_all_teams["current_league_position"] + 1) * (1 + match_data_all_teams["gameweek"]/38))
+
+#Drop the cumulative points and gameweek columns as they are no longer needed
+match_data_all_teams.drop(columns = ["cumulative_points", "gameweek", "current_league_position"], axis=1, inplace=True)
+
+
+####################################
+#Rolling Averages
+####################################
 
 #Function that will create a rolling average of the data for the last 5 games for each team
 #TODO = Maybe look at having a minimum winodw of 3 or something here to reduce the number of missing datapoints
@@ -212,12 +244,30 @@ match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "opponent
 
 match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lambda x: rolling_averages(x, cols=["opponent_elo_points"], new_cols=["average_opponent_elo"], window=5)).droplevel("team_full_name")
 
-historical_betting_all_teams["game_id"] = historical_betting_all_teams.apply(
+####################################
+#Betting odds data
+####################################
+#Need to combine the historical data with the live data
+
+#Reading in the betting data
+all_betting_data = feather.read_feather(f"{intermediate}/all_betting_data.feather")
+
+#Updating the betting data with the latest betting odds
+all_betting_data = pd.concat([all_betting_data, live_betting_all_teams], axis=0, ignore_index=True, join="inner").drop_duplicates(subset=['date', 'home_team_full_name', 'away_team_full_name'],keep='last')
+
+feather.write_feather(df=all_betting_data, dest=f"{intermediate}/all_betting_data.feather")
+
+#Removing the hour and minute from the date column but keep UTC timezone
+all_betting_data['date'] = all_betting_data['date'].apply(lambda x: x.date())
+
+all_betting_data["game_id"] = all_betting_data.apply(
     lambda row: (
         str(row["date"]) + "_" + row["home_team_full_name"] + "_" + row["away_team_full_name"]), axis=1
 )
 
-match_data_all_teams = match_data_all_teams.merge(historical_betting_all_teams[[col for col in historical_betting_all_teams.columns if col != "date"]], 
+
+
+match_data_all_teams = match_data_all_teams.merge(all_betting_data[[col for col in all_betting_data.columns if col != "date"]], 
                                   how = "left", 
                                   left_on=["team_full_name", "opponent_full_name" ,"game_id"], 
                                   right_on=["home_team_full_name", "away_team_full_name" ,"game_id"]).drop(columns=["home_team_full_name", "away_team_full_name"])
@@ -241,7 +291,7 @@ match_data_all_teams = match_data_all_teams.merge(historical_betting_all_teams[[
 
 #These are the columns that will be used for the home and away teams
 home_and_away_cols = ["team_full_name", "gf_rolling", "ga_rolling", "xg_rolling", "xga_rolling", "npxg_rolling", "points_rolling", "sh_rolling",
-                      "poss_rolling", "sot_rolling", "dist_rolling", "team_elo_points" ,"points_against_opponent", "average_opponent_elo", "venue_points"]
+                      "poss_rolling", "sot_rolling", "dist_rolling", "team_elo_points" ,"points_against_opponent", "average_opponent_elo", "venue_points", "weighted_league_position"]
 
 #These are the betting columns. They include information for both the home and away teams
 betting_cols = [col for col in match_data_all_teams.columns if col.startswith("odds_")]
@@ -277,6 +327,10 @@ all_football_data.dtypes
 #Chcking for missing values in the all_football_data dataframe. There are always going to be some missing values as I am taking rolling averages.
 all_football_data.isnull().sum()
 
+#Removing all rows where points_agains_opponent is null. This is because the team has not played the opponent before. So I will fill these with the corresponding value from points_rolling column  
+all_football_data = all_football_data.dropna(subset=["points_against_opponent_home_team"])
+
+all_football_data.isnull().sum()
 
 #Dropping the columns that have missing values. As this will cause issues for the ML models.
 all_football_data = all_football_data.dropna()
@@ -284,7 +338,11 @@ all_football_data = all_football_data.dropna()
 #Chcking for missing values in the all_football_data dataframe. There are always going to be some missing values as I am taking rolling averages.
 all_football_data.isnull().sum()
 
-print(len(all_football_data))
+#Columns to keep
+cols_for_model = ["date", "result"] + [col for col in all_football_data.columns if col.startswith(tuple(home_and_away_cols)) and not col.startswith("team_full_name")] + [col for col in all_football_data.columns if col in betting_cols]
+
+
+all_football_data = all_football_data[cols_for_model]
 
 #Writing the all_football_data dataframe to a feather file. This is essentially my input data for the model
 feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data.feather")

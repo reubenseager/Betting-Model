@@ -6,6 +6,14 @@
 #Imports
 import os
 from pathlib import Path
+import pandas as pd
+import pyarrow.feather as feather   # Package to store dataframes in a binary format
+import glob
+import io
+import requests  # Used to access and download information from websites
+import time # Package to slow down the webscraping process
+from tqdm import tqdm # Package to show progress bar
+
 
 # Getting the current working directory and then changing it to the root of the project.
 # If you would like to run this code on your own machine, please change the path to the root of the project
@@ -26,9 +34,9 @@ output = Path.cwd() / "data" / "output"
 ####################################################################################
 
 #Imports
-import pandas as pd
-import pyarrow.feather as feather   # Package to store dataframes in a binary format
-import glob
+# import pandas as pd
+# import pyarrow.feather as feather   # Package to store dataframes in a binary format
+# import glob
 
 # Running the historical betting odds function
 with open(Path.cwd()/"src"/"development"/"historical_betting_odds_module.py") as f:
@@ -42,11 +50,11 @@ with open(Path.cwd()/"src"/"development"/"historical_betting_odds_module.py") as
 ##ELO Ratings
 
 #Imports
-import io
+# import io
 
-import requests  # Used to access and download information from websites
-import time # Package to slow down the webscraping process
-from tqdm import tqdm # Package to show progress bar
+# import requests  # Used to access and download information from websites
+# import time # Package to slow down the webscraping process
+# from tqdm import tqdm # Package to show progress bar
 
 # Running the historical betting odds function
 with open(Path.cwd()/"src"/"development"/"ELO_ratings_module.py") as f:
@@ -67,7 +75,7 @@ from dateutil import parser # Package to work with dates
 
 import pytz
 
-# Running the historical betting odds function
+# Running the Live betting odds module
 with open(Path.cwd()/"src"/"development"/"odds_api_module.py") as f:
     code = compile(f.read(), 'odds_api_module.py', 'exec')
     exec(code)
