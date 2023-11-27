@@ -37,7 +37,7 @@ latest_year = 2024
 earlist_year = 2017 #Theres no npxg at some point back in the data so will probs notread it in
 
 
-reread_data = True #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
+reread_data = False #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
 
 #Re-read all data
 if reread_data :

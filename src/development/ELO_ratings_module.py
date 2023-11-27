@@ -67,7 +67,7 @@ def elo_ratings_function(team_name):
     #Write the dataframe to a feather file
     feather.write_feather(df=elo_df_all_dates, dest=f"{elo_data_folder}/{team_name}_elo_ratings.feather")
     
-    time.sleep(15)  # A lot of websites allow scraping but don't want you to do it too quickly, so you don't slow down the website
+    time.sleep(10)  # A lot of websites allow scraping but don't want you to do it too quickly, so you don't slow down the website
 
  
 #Creating a list of all the teams that I want to access data for. These team names need to be exact for the API to work.

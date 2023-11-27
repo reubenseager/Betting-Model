@@ -102,6 +102,12 @@ today = datetime.now(pytz.utc)
 # Filter the odds_json list to only include games with a commence_time within the next 6 days. This is to avoid errors with
 odds_json_week = [game for game in odds_json if parser.parse(game['commence_time']).replace(tzinfo=pytz.utc) <= today + timedelta(days=6)]
 
+#Printing to the console which matches are being downloaded
+print("Downloading odds for the following EPL games:")
+for game in odds_json_week:
+    print(game['home_team'], "vs", game['away_team'], "on", parser.parse(game['commence_time']).strftime("%A"))
+    
+
 #Instantiating a list to store the odds dataframes for each of the games
 match_odds_list = []
 for game in odds_json_week:  
@@ -156,6 +162,10 @@ for game in odds_json_week:
     match_odds_list.append(all_bookmaker_odds)  
     
 
+#Remving all_bookmaker_odds from memory as it is no longer needed
+del all_bookmaker_odds
+
+
 #Concatenating all the match odds dataframes together
 all_match_odds = pd.concat(match_odds_list, ignore_index=True, axis=0, sort=False)
 
@@ -199,6 +209,14 @@ all_match_odds = all_match_odds[["date", "home_team_full_name", "away_team_full_
                                                            "odds_h_pinnacle", "odds_a_pinnacle", "odds_d_pinnacle"]]
 
 all_match_odds.reset_index(drop=True, inplace=True)
+
+#Checking that all the columns have no missing values. Throw warnign message if there are missing values
+if all_match_odds.isnull().sum().sum() > 0:
+    print("WARNING: There are missing values in the dataset. Please have a look at the dataset to see what the issues is")
+else:
+    if len(all_match_odds) == len(odds_json_week):
+        print("All odds have been downloaded successfully :)")
+
 
 #Writing to a feather file in the intermediate folder
 all_match_odds.to_feather(f"{live_betting_odds_folder}/all_match_odds.feather")
