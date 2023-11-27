@@ -93,3 +93,10 @@ with open(Path.cwd()/"src"/"development"/"webscraping_data_module.py") as f:
     exec(code)
     
 
+####################################################################################
+#Pre-Processing Data
+####################################################################################
+
+with open(Path.cwd()/"src"/"development"/"pre_processing_module.py") as f:
+    code = compile(f.read(), 'pre_processing_module.py', 'exec')
+    exec(code)

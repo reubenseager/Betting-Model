@@ -62,6 +62,7 @@ live_betting_all_teams = pd.read_feather(f"{live_betting_odds_folder}/all_match_
 
 #Converting the date column to a datetime object
 historical_betting_all_teams["date"]= historical_betting_all_teams["date"].apply(lambda x: x.date())
+live_betting_all_teams["date"]= live_betting_all_teams["date"].apply(lambda x: x.date())
 elo_ratings_all_teams["date"]= elo_ratings_all_teams["date"].apply(lambda x: x.date())
 
 team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
@@ -114,12 +115,9 @@ elo_ratings_all_teams.isnull().sum()
 
 
 #Now merging the elo_df_all_dates dataframe to the match_df dataframe
-match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "team_elo_points"}).drop(columns=["elo_team_name"])
-match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how = "left", left_on=["opponent_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "opponent_elo_points"}).drop(columns=["elo_team_name"])
+match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how="left", left_on=["team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "team_elo_points"}).drop(columns=["elo_team_name"]).drop_duplicates()
+match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how="left", left_on=["opponent_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "opponent_elo_points"}).drop(columns=["elo_team_name"]).drop_duplicates()
 
-
-#Dropping any duplicate rows
-match_data_all_teams = match_data_all_teams.drop_duplicates()
 
 
 #Dropping the excess name columns
@@ -147,6 +145,59 @@ match_data_all_teams.isnull().sum()
 #Writing a test to check that there are no missing values in the data. Print out which columns are missing values if there are any (NOT sure if this works or how you use pytest)
 def test_no_missing_values():
     assert match_data_all_teams.isnull().sum().sum() == 0, "There are missing values in the data"
+
+# def test_data_types():
+#     assert match_data_all_teams.dtypes.equals(pd.Series({
+#         'team_full_name': 'object',
+#         'gf_rolling': 'float64',
+#         'ga_rolling': 'float64',
+#         'xg_rolling': 'float64',
+#         'xga_rolling': 'float64',
+#         'npxg_rolling': 'float64',
+#         'points_rolling': 'float64',
+#         'sh_rolling': 'float64',
+#         'poss_rolling': 'float64',
+#         'sot_rolling': 'float64',
+#         'dist_rolling': 'float64',
+#         'team_elo_points': 'float64',
+#         'points_against_opponent': 'float64',
+#         'average_opponent_elo': 'float64',
+#         'venue_points': 'float64',
+#         'weighted_league_position': 'float64'
+#     })), "Incorrect data types in the columns"
+
+# def test_rolling_average_calculation():
+#     # Test rolling average calculation for one team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team A']
+#     rolling_avg = team_data['gf_rolling'].rolling(window=5, closed='left').mean()
+#     assert team_data['gf_rolling'].equals(rolling_avg), "Incorrect rolling average calculation for gf_rolling"
+    
+#     # Test rolling average calculation for another team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team B']
+#     rolling_avg = team_data['xg_rolling'].rolling(window=5, closed='left').mean()
+#     assert team_data['xg_rolling'].equals(rolling_avg), "Incorrect rolling average calculation for xg_rolling"
+
+# def test_cumulative_points_calculation():
+#     # Test cumulative points calculation for one team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team A']
+#     cumulative_points = team_data.groupby(['team_full_name', 'season'])['points'].cumsum()
+#     assert team_data['cumulative_points'].equals(cumulative_points), "Incorrect cumulative points calculation"
+    
+#     # Test cumulative points calculation for another team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team B']
+#     cumulative_points = team_data.groupby(['team_full_name', 'season'])['points'].cumsum()
+#     assert team_data['cumulative_points'].equals(cumulative_points), "Incorrect cumulative points calculation"
+
+# def test_current_league_position_calculation():
+#     # Test current league position calculation for one team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team A']
+#     current_position = team_data.groupby(['season', 'gameweek'])['cumulative_points'].rank(ascending=False, method='min', pct=False)
+#     assert team_data['current_league_position'].equals(current_position), "Incorrect current league position calculation"
+    
+#     # Test current league position calculation for another team
+#     team_data = match_data_all_teams[match_data_all_teams['team_full_name'] == 'Team B']
+#     current_position = team_data.groupby(['season', 'gameweek'])['cumulative_points'].rank(ascending=False, method='min', pct=False)
+#     assert team_data['current_league_position'].equals(current_position), "Incorrect current league position calculation"
     
 test_no_missing_values()
   
@@ -252,13 +303,13 @@ match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lamb
 #Reading in the betting data
 all_betting_data = feather.read_feather(f"{intermediate}/all_betting_data.feather")
 
-#Updating the betting data with the latest betting odds
-all_betting_data = pd.concat([all_betting_data, live_betting_all_teams], axis=0, ignore_index=True, join="inner").drop_duplicates(subset=['date', 'home_team_full_name', 'away_team_full_name'],keep='last')
+#Updating the betting data with any missing historical betting odds and the live betting odds
+all_betting_data = pd.concat([all_betting_data, historical_betting_all_teams, live_betting_all_teams], axis=0, ignore_index=True, join="inner").drop_duplicates(subset=['date', 'home_team_full_name', 'away_team_full_name'],keep='last')
 
 feather.write_feather(df=all_betting_data, dest=f"{intermediate}/all_betting_data.feather")
 
 #Removing the hour and minute from the date column but keep UTC timezone
-all_betting_data['date'] = all_betting_data['date'].apply(lambda x: x.date())
+#all_betting_data['date'] = all_betting_data['date'].apply(lambda x: x.date())
 
 all_betting_data["game_id"] = all_betting_data.apply(
     lambda row: (
@@ -347,37 +398,3 @@ all_football_data = all_football_data[cols_for_model]
 #Writing the all_football_data dataframe to a feather file. This is essentially my input data for the model
 feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data.feather")
 
-
-
-####################################
-#Feature Selection
-####################################
-#TODO = Look at using things like ANOVA to select the best features for the model.
-#TODO = Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
-
-#sklearn-genetic (https://pypi.org/project/sklearn-genetic/)
-#https://sklearn-genetic.readthedocs.io/en/latest/api.html#genetic_selection.GeneticSelectionCV
-#https://www.kaggle.com/code/tanmayunhale/genetic-algorithm-for-feature-selection
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
-
-#Anova feature selection
-from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import f_classif
-
-#Selecting all features
-anova_fs = SelectKBest(score_func=f_classif, k='all')
-
-#Fitting the anova feature selection to the data
-anova_fs.fit(all_football_data.drop(columns=["date", "result"], axis=1), all_football_data["result"])
-
-X_train_anova_fs = anova_fs.transform(all_football_data.drop(columns=["date", "result"], axis=1))
-
-X_test_anova_fs = anova_fs.transform(all_football_data.drop(columns=["date", "result"], axis=1))
-#Creating a dataframe of the anova feature selection sco
-"""
-For attribute selection the following at- tribute evaluators and search methods were used: CfsSubsetEval with BestFirst, ConsistencySubsetEval with BestFirst, WrapperSubsetEval (classifier: Naive- Bayes) with BestFirst
-
-"""
