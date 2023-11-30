@@ -29,6 +29,8 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 
 from sklearn.ensemble import RandomForestClassifier
+from pgmpy.models import BayesianModel
+
 
 from xgboost import XGBClassifier
 from sklearn.ensemble import StackingClassifier
@@ -60,10 +62,9 @@ output = Path.cwd() / "data" / "output"
 #Reading in the data
 ####################################
 
-all_football_data = pd.read_feather(f"{intermediate}/all_football_data.feather")
+#Reading in the data that will be used in the model
+input_data = pd.read_feather(f"{intermediate}/all_football_data.feather")
 
-#setting the index to the date
-all_football_data = all_football_data.set_index("date")
 
 #Splitting data into test and train sets via a date split
 
