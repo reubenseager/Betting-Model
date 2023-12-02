@@ -100,3 +100,12 @@ with open(Path.cwd()/"src"/"development"/"webscraping_data_module.py") as f:
 with open(Path.cwd()/"src"/"development"/"pre_processing_module.py") as f:
     code = compile(f.read(), 'pre_processing_module.py', 'exec')
     exec(code)
+    
+####################################################################################
+#Feature Selection
+####################################################################################
+
+with open(Path.cwd()/"src"/"development"/"feature_selection_module.py") as f:
+    code = compile(f.read(), 'feature_selection_module.py', 'exec')
+    exec(code)
+    
