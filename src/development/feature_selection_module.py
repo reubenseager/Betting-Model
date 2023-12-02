@@ -25,6 +25,8 @@ from sklearn.linear_model import Lasso
 
 #Saling
 from sklearn.preprocessing import StandardScaler
+from sklearn.externals import joblib
+
 
 #Feature Selection
 from sklearn.feature_selection import RFE #Not using the CV version as I am using time series data. Not sure if this is right though.
@@ -61,6 +63,10 @@ X_train, X_test, y_train, y_test = train_test_split(input_data.drop(columns=["re
 #scaling the numerical features of the input data. Need to make sure that I apply the same scaler to the test data s well to avoid data leakage. Also this is what the models will be built off
 scaler = StandardScaler()
 X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
+
+#writing the scaler to a file so that it can be used later on in the process
+joblib.dump(scaler, f"{intermediate}/scaler.pkl")
+
 
 #counting occurences of each class in the target variable. This helps to determine which metric to use for the feature selection
 y_train.value_counts()
