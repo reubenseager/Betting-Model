@@ -25,7 +25,7 @@ from sklearn.linear_model import Lasso
 
 #Saling
 from sklearn.preprocessing import StandardScaler
-from sklearn.externals import joblib
+import joblib
 
 
 #Feature Selection
@@ -56,6 +56,8 @@ input_data = feather.read_feather(f"{intermediate}/all_football_data.feather")
 input_data = input_data.sort_values(by="date", ascending=True)
 input_data.set_index("date", inplace=True)
 
+#Saving prescaled input data using feather
+feather.write_feather(input_data, f"{intermediate}/input_data.feather")
 
 #Splitting the data into test and train datasets. This needs to be done before any feature selection is done to avoid data leakage
 X_train, X_test, y_train, y_test = train_test_split(input_data.drop(columns=["result"], axis=1), input_data["result"], test_size=0.15, shuffle=False) #Setting shuffle to false, again to prevent data leakage
@@ -65,8 +67,7 @@ scaler = StandardScaler()
 X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns, index=X_train.index)
 
 #writing the scaler to a file so that it can be used later on in the process
-joblib.dump(scaler, f"{intermediate}/scaler.pkl")
-
+joblib.dump(scaler, f"{intermediate}/scaler.save")
 
 #counting occurences of each class in the target variable. This helps to determine which metric to use for the feature selection
 y_train.value_counts()
@@ -105,6 +106,8 @@ rf_mask = rfe.support_
 
 #printing the features that should be kept
 print(X_train_scaled.columns[rf_mask])
+print(X_train_scaled.columns[~rf_mask])
+
 
 #Getting the score from the model (Not sure if will work)
 params = rfe.get_params()
@@ -127,12 +130,14 @@ svc_mask = rfe.support_
 
 #printing the features that should be kept
 print(X_train_scaled.columns[svc_mask])
+print(X_train_scaled.columns[~svc_mask])
+
 
 #Combining the masks of the three models to vote on which features should be kept
-feature_mask = np.sum([svc_mask, gb_mask, rf_mask], axis=0)
+feature_mask = np.sum([gb_mask, rf_mask], axis=0)
 
 #Only selecting features that appeared in 2 of the three models
-feature_mask = feature_mask >= 2
+feature_mask = feature_mask >= 1
 
 #Printing the features that should be kept
 print(X_train_scaled.columns[feature_mask])
@@ -141,6 +146,6 @@ print(X_train_scaled.columns[feature_mask])
 print(X_train_scaled.columns[~feature_mask])
 
 #Storing the names of the features that should be kept in a list
-features_to_keep = X_train_scaled.columns[feature_mask].tolist()
+fs_columns = X_train_scaled.columns[feature_mask].tolist()
 
-#I also think I should look how the model performs when using the selected features and the original features. To see if reducing the number of features has any impact on the model performance.
+joblib.dump(fs_columns, f"{intermediate}/fs_columns.save")

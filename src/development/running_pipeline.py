@@ -109,3 +109,16 @@ with open(Path.cwd()/"src"/"development"/"feature_selection_module.py") as f:
     code = compile(f.read(), 'feature_selection_module.py', 'exec')
     exec(code)
     
+####################################################################################
+# Build simple models
+# - Logistic regression
+# - Random forest
+####################################################################################
+
+####################################################################################
+# Model analysis
+# - Look at coefficients
+# - Does model look sensibke
+# - Are features scaled properly 
+# - Model accuracy
+####################################################################################
