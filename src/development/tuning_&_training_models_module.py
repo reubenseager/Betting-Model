@@ -3,10 +3,10 @@ This script takes the pre-processed input data and trains multiple classfication
 
 These models will then be used in a stacked ensemble model to predict the final output. In order for the stacking algorithm to be effective, the models need to be as different as possible.
 The models that I am planning to use are:
-    - Random Forest
-    - XGBoost (Or SKlearn's Gradient Boosting Classifier)
+    - Random Forest (Done)
+    - XGBoost (Or SKlearn's Gradient Boosting Classifier) (Done)
     - KMeans Clustering
-    - SVM (Support Vector Machine)
+    - SVM (Support Vector Machine) (Done)
     - Naive Bayes Network (PGMPY Implemntation)
     - Neural Network (Keras Implemntation)
     
@@ -39,6 +39,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 
 #Base models
@@ -46,6 +47,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 # from xgboost import XGBClassifier
 from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from pgmpy.models import BayesianNetwork
 from tensorflow import keras
@@ -73,7 +75,8 @@ raw = Path.cwd() / "data" / "raw"
 intermediate = Path.cwd() / "data" / "intermediate"
 output = Path.cwd() / "data" / "output"   
 
-
+#Location to save the trained studies
+Path("data/intermediate/model_studies").mkdir(exist_ok=True)
 
 ####################################
 #Reading in the data
@@ -144,7 +147,10 @@ def rf_objective(trial):
 
 #Create study object
 rf_study = optuna.create_study(direction="maximize", study_name="Random Forest Study")
-rf_study.optimize(rf_objective, n_trials=100, show_progress_bar=True)
+rf_study.optimize(rf_objective, n_trials=200, show_progress_bar=True)
+
+#Saving the study so it can be used later on
+joblib.dump(rf_study, f"data/intermediate/model_studies/rf_study.pkl")
 
 #Retuning the best parameters
 rf_best_params = rf_study.best_params
@@ -152,42 +158,161 @@ rf_best_params = rf_study.best_params
 #returing the best score
 rf_best_score = rf_study.best_value
 
-
-rf_best_model = RandomForestClassifier(**rf_best_params, random_state=41)  
-
-
 ####################
 #Gradient Boosting
 ####################
 
+def gb_objective(trial):
 
-#Creating the hyperparameter grid for the random forest model
-rf_param_grid = {
-    "n_estimators": [100, 200, 300, 400, 500],
-    "max_depth": [1, 2, 3, 4, 5, 6, 7, 8, 9 ,10],
-    "min_samples_split": [2, 3, 4, 5, 6, 7, 8, 9 ,10],
-    "min_samples_leaf": [1, 2, 3, 4, 5, 6, 7, 8, 9 ,10],
-    "max_features": ["sqrt", "log2"],
-    "bootstrap": [True, False],
-    "criterion": ["gini", "entropy"],
-    "random_state": [41]
-}
+    #Parameters to tune
+    loss = trial.suggest_categorical("loss", ["log_loss"])
+    learning_rate = trial.suggest_float("learning_rate", 0.001, 1) #This shrinks the contribution of each tree
+    n_estimators = trial.suggest_int("n_estimators", 50, 500) #This is the number of trees in the forest
+    min_samples_split = trial.suggest_int("min_samples_split", 2, 50)
+    max_depth = trial.suggest_int("max_depth", 5, 50) #This is how deep the tree can be split
+    max_features = trial.suggest_categorical("max_features", ["sqrt", "log2"])    
 
-rf_grid_search = GridSearchCV(RandomForestClassifier(), rf_param_grid, cv=tscv, scoring="f1_macro", n_jobs=-1, verbose=1)
+    #creating the model
+    gb = GradientBoostingClassifier(loss=loss,
+                                    learning_rate=learning_rate,
+                                    n_estimators=n_estimators,
+                                    min_samples_split=min_samples_split,
+                                    max_depth=max_depth,
+                                    max_features=max_features,
+                                    random_state=41)
 
-#Fitting the grid search object to the training data
-rf_grid_search.fit(X_train, y_train)
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(gb, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
 
-#Extracting the best estimator
-rf_grid_search.best_params_ 
+#Create study object
+gb_study = optuna.create_study(direction="maximize", study_name="Gradient Boosting Classifier Study")
+gb_study.optimize(gb_objective, n_trials=200, show_progress_bar=True)
+
+#Saving the study so it can be used later on
+joblib.dump(gb_study, f"data/intermediate/model_studies/gb_study.pkl")
+
+#Retuning the best parameters
+gb_best_params = gb_study.best_params
+
+#Returing the best score
+gb_best_score = gb_study.best_value
+
+####################
+#Support Vector Classifier
+####################
+
+def svc_objective(trial):
+
+    #Parameters to tune
+    C = trial.suggest_float("C", 0.001, 1000)
+    kernel = trial.suggest_categorical("kernel", ["linear", "poly", "rbf", "sigmoid"]) #Linear appears to be the best
+    degree = trial.suggest_int("degree", 1, 10)
+    gamma = trial.suggest_categorical("gamma", ["scale", "auto"])
+    shrinking = trial.suggest_categorical("shrinking", [True, False])
+    probability = trial.suggest_categorical("probability", [False])
+    class_weight = trial.suggest_categorical("class_weight", ["balanced", None])
+    max_iter = trial.suggest_categorical("max_iter", [-1])
+    decision_function_shape = trial.suggest_categorical("decision_function_shape", ["ovo", "ovr"])
+ 
+
+    #creating the model
+    svc = SVC(C=C,
+              kernel=kernel,
+              degree=degree,
+              gamma=gamma,
+              shrinking=shrinking,
+              probability=probability,
+              class_weight=class_weight,
+              max_iter=max_iter,
+              decision_function_shape=decision_function_shape,
+              random_state=41)
+
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(svc, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+#Create study object
+svc_study = optuna.create_study(direction="maximize", study_name="SVC study")
+svc_study.optimize(svc_objective, n_trials=50, show_progress_bar=True) #Reducing the number of trials as this appears to be a very computationally expensive model
+
+#Saving the study so it can be used later on
+joblib.dump(svc_study, f"data/intermediate/model_studies/svc_study.pkl")
+
+#Retuning the best parameters
+svc_best_params = svc_study.best_params
+
+#Returing the best score
+svc_best_score = svc_study.best_value
+
+####################
+#KNN Classifier
+####################
+
+def knn_objective(trial):
+    
+    #Adding a PCA step to the pipeline to see the effect of dimensionality reduction
+
+    #Parameters to tune
+    n_neighbors = trial.suggest_int("n_neighbors", 1, 100)
+    weights = trial.suggest_categorical("weights", ["distance"])
+    leaf_size = trial.suggest_int("leaf_size", 1, 100)
+    p = trial.suggest_int("p", 1, 10)
+    metric = trial.suggest_categorical("metric", ["minkowski"])
+    
+    #use_pca = trial.suggest_categorical("use_pca", [True, False])
+    
+    #Create the pipeline with hyperparameters
+    # steps = [
+    #     ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors,
+    #                                         weights=weights,
+    #                                         leaf_size=leaf_size,
+    #                                         p=p,
+    #                                         metric=metric))
+    # ]
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors,
+                                            weights=weights,
+                                            leaf_size=leaf_size,
+                                            p=p,
+                                            metric=metric)
+    # if use_pca:
+    #     n_components = trial.suggest_int('n_components', 1, min(X_train.shape))
+    #     steps.insert(0, ('pca', PCA(n_components=n_components))) #Inserting the PCA step at the start of the pipeline
+        
+    #Creating the pipeline
+    #knn = Pipeline(steps)
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(knn, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+#Create study object
+knn_study = optuna.create_study(direction="maximize", study_name="kNN study")
+knn_study.optimize(knn_objective, n_trials=500, show_progress_bar=True)
+
+#Saving the study so it can be used later on
+joblib.dump(knn_study, f"data/intermediate/model_studies/knn_study.pkl")
+
+#Retuning the best parameters
+knn_best_params = knn_study.best_params
+
+#Returing the best score
+knn_best_score = knn_study.best_value
+
+#fitting knn model using the best parameters
+# knn_best_model = KNeighborsClassifier(**knn_best_params)
+# knn_best_model.fit(X_train, y_train)
 
 
 
+####################################
+#Training Base Models
+####################################
 
-scores = cross_val_score(rf, X, y, cv=tscv, scoring='accuracy')
-
-#Doing a manual time series split
-train = all_football_data[all_football_data.index <= "2022-11-01"]
-test = all_football_data[all_football_data.index > "2022-11-01"]
-
-rf.fit(train.drop(["result"], axis=1), train["result"])
+#Each of the individual models will now be trained on the entire dataset using the best parameters found above (Maybe done using stacking classifier)
+# rf_best_model.fit(X_train, y_train)
+# gb_best_model.fit(X_train, y_train)
+# svc_best_model.fit(X_train, y_train)
+# knn_best_model.fit(X_train, y_train)
