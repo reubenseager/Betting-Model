@@ -13,7 +13,7 @@ import io
 import requests  # Used to access and download information from websites
 import time # Package to slow down the webscraping process
 from tqdm import tqdm # Package to show progress bar
-
+#import kedro # Package to run the pipeline(Look into this)
 
 # Getting the current working directory and then changing it to the root of the project.
 # If you would like to run this code on your own machine, please change the path to the root of the project

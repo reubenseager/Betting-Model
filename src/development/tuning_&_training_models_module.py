@@ -5,7 +5,7 @@ These models will then be used in a stacked ensemble model to predict the final 
 The models that I am planning to use are:
     - Random Forest (Done)
     - XGBoost (Or SKlearn's Gradient Boosting Classifier) (Done)
-    - KMeans Clustering
+    - k-NN Classifier (Done)
     - SVM (Support Vector Machine) (Done)
     - Naive Bayes Network (PGMPY Implemntation)
     - Neural Network (Keras Implemntation)
@@ -16,6 +16,7 @@ This model will then be stored so that it can be used later on. I also might wan
 https://developer.ibm.com/articles/stack-machine-learning-models-get-better-results/ (This is good for model stacking)
 http://rasbt.github.io/mlxtend/user_guide/classifier/StackingCVClassifier/ (This is about cross validation stacking for classifiers)
 https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.StackingClassifier.html
+https://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/stacked-ensembles.html#stacking-super-learning
 
 https://machinelearningmastery.com/stacking-ensemble-machine-learning-with-python/
 Apparently (according to the using bookmaker odds to predict football outcomes paper) the best model for draws are the ensemble-selection classifier
@@ -151,6 +152,7 @@ rf_study.optimize(rf_objective, n_trials=200, show_progress_bar=True)
 
 #Saving the study so it can be used later on
 joblib.dump(rf_study, f"data/intermediate/model_studies/rf_study.pkl")
+rf_study = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")   #Loading in the study
 
 #Retuning the best parameters
 rf_best_params = rf_study.best_params
@@ -192,6 +194,7 @@ gb_study.optimize(gb_objective, n_trials=200, show_progress_bar=True)
 
 #Saving the study so it can be used later on
 joblib.dump(gb_study, f"data/intermediate/model_studies/gb_study.pkl")
+gb_study = joblib.load(f"data/intermediate/model_studies/gb_study.pkl")   #Loading in the study
 
 #Retuning the best parameters
 gb_best_params = gb_study.best_params
@@ -240,6 +243,7 @@ svc_study.optimize(svc_objective, n_trials=50, show_progress_bar=True) #Reducing
 
 #Saving the study so it can be used later on
 joblib.dump(svc_study, f"data/intermediate/model_studies/svc_study.pkl")
+svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")   #Loading in the study
 
 #Retuning the best parameters
 svc_best_params = svc_study.best_params
@@ -297,6 +301,7 @@ joblib.dump(knn_study, f"data/intermediate/model_studies/knn_study.pkl")
 
 #Retuning the best parameters
 knn_best_params = knn_study.best_params
+knn_study = joblib.load(f"data/intermediate/model_studies/knn_study.pkl")   #Loading in the study
 
 #Returing the best score
 knn_best_score = knn_study.best_value
@@ -305,7 +310,28 @@ knn_best_score = knn_study.best_value
 # knn_best_model = KNeighborsClassifier(**knn_best_params)
 # knn_best_model.fit(X_train, y_train)
 
+####################
+#Naive Bayes Network
+####################
+def nbn_objective(trial):
 
+    nbn = 
+
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(nbn, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+#Create study object
+nbn_study = optuna.create_study(direction="maximize", study_name="nbn study")
+nbn_study.optimize(knn_objective, n_trials=500, show_progress_bar=True)
+
+#Saving the study so it can be used later on
+joblib.dump(nbn_study, f"data/intermediate/model_studies/nbn_study.pkl")
+
+#Retuning the best parameters
+nbn_study_best_params = nbn_study.best_params
+nbn_study = joblib.load(f"data/intermediate/model_studies/nbn_study.pkl")   #Loading in the study
 
 ####################################
 #Training Base Models
