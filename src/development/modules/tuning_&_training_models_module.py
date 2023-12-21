@@ -13,6 +13,13 @@ The models that I am planning to use are:
 Finally I am planning to use a logistic regression model as the meta learner to combine the outputs of the models mentioned above.
 This model will then be stored so that it can be used later on. I also might want to retrain the model as I get new data as more games are played.
 
+In terms of splitting the data up I think I need three splits: (Not 100% sure on this)
+    - Training data (80%) - This will be used to train the base learners using cross validation
+    - Hold out data (10%) - This will be used to test the train the meta learner
+    - Test data (10%) - This will be used to test the superlearner
+    
+Also reading that if you use the probability outputs rather than the pure classification outputs, you can improve your results. The probability outputs provide more context on the decisions beiung made (https://towardsdatascience.com/a-deep-dive-into-stacking-ensemble-machine-learning-part-i-10476b2ade3#:~:text=In%20a%20binary%20classification%20for,the%20stacking%20model%20improves%20significantly.)
+
 https://developer.ibm.com/articles/stack-machine-learning-models-get-better-results/ (This is good for model stacking)
 http://rasbt.github.io/mlxtend/user_guide/classifier/StackingCVClassifier/ (This is about cross validation stacking for classifiers)
 https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.StackingClassifier.html
@@ -52,6 +59,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from pgmpy.models import BayesianNetwork
 from tensorflow import keras
+
 #LSTM
 #Stacking models
 from sklearn.ensemble import StackingClassifier
@@ -332,6 +340,36 @@ joblib.dump(nbn_study, f"data/intermediate/model_studies/nbn_study.pkl")
 #Retuning the best parameters
 nbn_study_best_params = nbn_study.best_params
 nbn_study = joblib.load(f"data/intermediate/model_studies/nbn_study.pkl")   #Loading in the study
+
+
+####################################
+#Stacking Models
+####################################
+
+#This method for stacking ensemble has been tacken from https://towardsdatascience.com/a-deep-dive-into-stacking-ensemble-machine-learning-part-ii-69bfc0d6e53d
+
+
+#Loading the study for each of the models
+rf_study = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")
+gb_study = joblib.load(f"data/intermediate/model_studies/gb_study.pkl")
+svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")
+knn_study = joblib.load(f"data/intermediate/model_studies/knn_study.pkl")
+
+
+#Starting by creating 
+level_0_classifiers = dict()
+level_0_classifiers["rf"] = RandomForestClassifier(**rf_study.best_params, random_state=41)
+level_0_classifiers["gb"] = GradientBoostingClassifier(**gb_study.best_params, random_state=41)
+level_0_classifiers["svc"] = SVC(**svc_study.best_params, random_state=41)
+level_0_classifiers["knn"] = KNeighborsClassifier(**knn_study.best_params)
+
+
+level_1_classifier = RandomForestClassifier()
+
+stacking_classifier = StackingClassifier(estimators=list(level_0_classifiers.items()), final_estimator=level_1_classifier, cv=tscv, passthrough=True, stack_method="predict_proba")
+
+level_0_columns = [f"{name}_prediction" for name in level_0_classifiers.keys()]
+pd.DataFrame(stacking_classifier.fit_transform(X_train, y_train), columns=level_0_columns + list(X_train.columns))
 
 ####################################
 #Training Base Models
