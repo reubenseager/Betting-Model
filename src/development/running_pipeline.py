@@ -39,7 +39,7 @@ output = Path.cwd() / "data" / "output"
 # import glob
 
 # Running the historical betting odds function
-with open(Path.cwd()/"src"/"development"/"historical_betting_odds_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"historical_betting_odds_module.py") as f:
     code = compile(f.read(), 'historical_betting_odds_module.py', 'exec')
     exec(code)
 
@@ -57,7 +57,7 @@ with open(Path.cwd()/"src"/"development"/"historical_betting_odds_module.py") as
 # from tqdm import tqdm # Package to show progress bar
 
 # Running the historical betting odds function
-with open(Path.cwd()/"src"/"development"/"ELO_ratings_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"ELO_ratings_module.py") as f:
     code = compile(f.read(), 'ELO_ratings_module.py', 'exec')
     exec(code)
     
@@ -76,7 +76,7 @@ from dateutil import parser # Package to work with dates
 import pytz
 
 # Running the Live betting odds module
-with open(Path.cwd()/"src"/"development"/"odds_api_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"odds_api_module.py") as f:
     code = compile(f.read(), 'odds_api_module.py', 'exec')
     exec(code)
 
@@ -88,7 +88,7 @@ with open(Path.cwd()/"src"/"development"/"odds_api_module.py") as f:
 from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
 
 
-with open(Path.cwd()/"src"/"development"/"webscraping_data_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"webscraping_data_module.py") as f:
     code = compile(f.read(), 'webscraping_data_module.py', 'exec')
     exec(code)
     
@@ -97,7 +97,7 @@ with open(Path.cwd()/"src"/"development"/"webscraping_data_module.py") as f:
 #Pre-Processing Data
 ####################################################################################
 
-with open(Path.cwd()/"src"/"development"/"pre_processing_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"pre_processing_module.py") as f:
     code = compile(f.read(), 'pre_processing_module.py', 'exec')
     exec(code)
     
@@ -105,7 +105,7 @@ with open(Path.cwd()/"src"/"development"/"pre_processing_module.py") as f:
 #Feature Selection
 ####################################################################################
 
-with open(Path.cwd()/"src"/"development"/"feature_selection_module.py") as f:
+with open(Path.cwd()/"src"/"development"/"modules"/"feature_selection_module.py") as f:
     code = compile(f.read(), 'feature_selection_module.py', 'exec')
     exec(code)
     
