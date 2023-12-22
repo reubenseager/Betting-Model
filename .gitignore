@@ -162,7 +162,7 @@ cython_debug/
 
 # Standard Gitignore for Python Projects
 # Ignoring the following files and directories:
-data/
+data/*
 !data/raw/
 
 
