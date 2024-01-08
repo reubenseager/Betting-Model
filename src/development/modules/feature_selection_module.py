@@ -148,4 +148,4 @@ print(X_train_scaled.columns[~feature_mask])
 #Storing the names of the features that should be kept in a list
 fs_columns = X_train_scaled.columns[feature_mask].tolist()
 
-joblib.dump(fs_columns, f"{intermediate}/fs_columns.save")
+joblib.dump(fs_columns, f"{intermediate}/fs_columns.pkl")

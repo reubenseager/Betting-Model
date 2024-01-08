@@ -9,8 +9,9 @@ The models that I am planning to use are:
     - SVM (Support Vector Machine) (Done)
     - Naive Bayes Network (PGMPY Implemntation)
     - Neural Network (Keras Implemntation)
+    - CatBoost (Look into this)
     
-Finally I am planning to use a logistic regression model as the meta learner to combine the outputs of the models mentioned above.
+Finally I am planning to use a final meta learner to combine the outputs of the models mentioned above.
 This model will then be stored so that it can be used later on. I also might want to retrain the model as I get new data as more games are played.
 
 In terms of splitting the data up I think I need three splits: (Not 100% sure on this)
@@ -55,7 +56,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 # from xgboost import XGBClassifier
 from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsClassifier, NeighborhoodComponentsAnalysis
 from sklearn.naive_bayes import GaussianNB
 from pgmpy.models import BayesianNetwork
 from tensorflow import keras
@@ -111,6 +112,9 @@ X_train, X_test, y_train, y_test = train_test_split(input_data_fs.drop(columns=[
 
 #Scaling the data. This scaler will also be applied to the test data
 scaler = StandardScaler() #Creating the scaler object
+
+joblib.dump(scaler, f"{intermediate}/scaler.pkl") #Saving the scaler object so it can be used on the test data
+
 scaler.fit(X_train) #Fitting the scaler object to the training data
 X_train = pd.DataFrame(scaler.transform(X_train), columns=X_train.columns, index = X_train.index)#scaling the training data
 
@@ -222,7 +226,7 @@ def svc_objective(trial):
     degree = trial.suggest_int("degree", 1, 10)
     gamma = trial.suggest_categorical("gamma", ["scale", "auto"])
     shrinking = trial.suggest_categorical("shrinking", [True, False])
-    probability = trial.suggest_categorical("probability", [False])
+    probability = trial.suggest_categorical("probability", [True])#Changed to true as this is needed for the stacking classifier
     class_weight = trial.suggest_categorical("class_weight", ["balanced", None])
     max_iter = trial.suggest_categorical("max_iter", [-1])
     decision_function_shape = trial.suggest_categorical("decision_function_shape", ["ovo", "ovr"])
@@ -263,6 +267,8 @@ svc_best_score = svc_study.best_value
 #KNN Classifier
 ####################
 
+#look into using neighbourhood component analysis (NCA) as this is meant too wokr will. Seems liek a supervised version of PCA+KNN doesn
+#(https://scikit-learn.org/stable/auto_examples/neighbors/plot_nca_dim_reduction.html)
 def knn_objective(trial):
     
     #Adding a PCA step to the pipeline to see the effect of dimensionality reduction
@@ -342,41 +348,3 @@ nbn_study_best_params = nbn_study.best_params
 nbn_study = joblib.load(f"data/intermediate/model_studies/nbn_study.pkl")   #Loading in the study
 
 
-####################################
-#Stacking Models
-####################################
-
-#This method for stacking ensemble has been tacken from https://towardsdatascience.com/a-deep-dive-into-stacking-ensemble-machine-learning-part-ii-69bfc0d6e53d
-
-
-#Loading the study for each of the models
-rf_study = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")
-gb_study = joblib.load(f"data/intermediate/model_studies/gb_study.pkl")
-svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")
-knn_study = joblib.load(f"data/intermediate/model_studies/knn_study.pkl")
-
-
-#Starting by creating 
-level_0_classifiers = dict()
-level_0_classifiers["rf"] = RandomForestClassifier(**rf_study.best_params, random_state=41)
-level_0_classifiers["gb"] = GradientBoostingClassifier(**gb_study.best_params, random_state=41)
-level_0_classifiers["svc"] = SVC(**svc_study.best_params, random_state=41)
-level_0_classifiers["knn"] = KNeighborsClassifier(**knn_study.best_params)
-
-
-level_1_classifier = RandomForestClassifier()
-
-stacking_classifier = StackingClassifier(estimators=list(level_0_classifiers.items()), final_estimator=level_1_classifier, cv=tscv, passthrough=True, stack_method="predict_proba")
-
-level_0_columns = [f"{name}_prediction" for name in level_0_classifiers.keys()]
-pd.DataFrame(stacking_classifier.fit_transform(X_train, y_train), columns=level_0_columns + list(X_train.columns))
-
-####################################
-#Training Base Models
-####################################
-
-#Each of the individual models will now be trained on the entire dataset using the best parameters found above (Maybe done using stacking classifier)
-# rf_best_model.fit(X_train, y_train)
-# gb_best_model.fit(X_train, y_train)
-# svc_best_model.fit(X_train, y_train)
-# knn_best_model.fit(X_train, y_train)
