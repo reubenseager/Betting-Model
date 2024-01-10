@@ -28,6 +28,10 @@ Some people seem to be saying that the meta model must be trained on a seperate 
 https://stats.stackexchange.com/questions/239445/how-to-properly-do-stacking-meta-ensembling-with-cross-validation?rq=1
 
 TODO: Maybe look at putting game_id in a type of lookup. JUst so I'm completely dure that I'm joinging the correct data together.In the stakced probabilities part of the code
+TODO: Maybe look at adjusting the thresholds for the models to see fi this changes how well the model performs.
+TODO: Need to look at calibrating the classification of the stacked model. It's not predicting draws very well at the moment. they are more difficult to predict and are also rarer.
+
+
 """
 
 #Imports
@@ -68,11 +72,16 @@ from sklearn.ensemble import StackingClassifier
 import optuna   #You can get a progress bar for optuna
 import optuna_dashboard
 
+from more_itertools import powerset
+from collections.abc import Iterable
+
 #Model evaluation
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import roc_curve, auc, accuracy_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
-
 from sklearn.metrics import precision_recall_curve, average_precision_score, f1_score, precision_score
+
+#visualisation
+import matplotlib.pyplot as plt
 
 os.getcwd()
 os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
@@ -129,6 +138,8 @@ rf_study = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")
 gb_study = joblib.load(f"data/intermediate/model_studies/gb_study.pkl")
 svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")
 knn_study = joblib.load(f"data/intermediate/model_studies/knn_study.pkl")
+dimred_knn_study = joblib.load(f"data/intermediate/model_studies/dimred_knn_study.pkl")
+
 
 #Overwrtiting the best parameters for the SVC model to include the probability parameter
 
@@ -138,6 +149,7 @@ level_0_classifiers["rf"] = RandomForestClassifier(**rf_study.best_params, rando
 level_0_classifiers["gb"] = GradientBoostingClassifier(**gb_study.best_params, random_state=41)
 #level_0_classifiers["svc"] = SVC(**svc_study.best_params, random_state=41) #Will put back in once I've retrained the model with the probability parameter
 level_0_classifiers["knn"] = KNeighborsClassifier(**knn_study.best_params)
+level_0_classifiers["dimred_knn"] = KNeighborsClassifier(**dimred_knn_study.best_params)
 
 #Using a random forest classifier as the level 1 classifier
 level_1_classifier = RandomForestClassifier(random_state=41)
@@ -209,6 +221,9 @@ y_train_stacked = y_train_stacked[y_train_stacked["index_number"].isin(X_train_s
 #Fitting the level 1 classifier (meta-Learner) to the base input features + the stacked probabilities dataset (Should I be using some type of cross validation here?)
 level_1_classifier.fit(X_train_stacked.drop(labels=["index_number"], axis=1), y_train_stacked.drop(labels=["index_number"], axis=1))
 
+#Saving my level 1 stacked model
+joblib.dump(level_1_classifier, f"data/intermediate/level_1_classifier.pkl")
+
 #We now have a trained stacked meta model. This can now be applied to test data to see how well it compares to the base models
  
 #First we need to create the stacked probabilities for the test data
@@ -260,70 +275,107 @@ print(classification_report(y_test, y_pred_stacked))
 #Getting the feature importances of the stacked model and the names of the features
 stacked_feature_importances = level_1_classifier.feature_importances_
 
+#plotting the feature importance for the stacked model. These are sorted in order of importance
+plt.figure(figsize=(10,10))
+
+#Sorting the feature importances in order of importance
+stacked_feature_importances = pd.Series(stacked_feature_importances, index=X_train_stacked.drop(labels=["index_number"], axis=1).columns).sort_values(ascending=True)
+plt.barh(stacked_feature_importances.index, stacked_feature_importances)
+plt.title("Feature Importance for Stacked Model")
+plt.xlabel("Feature Importance")
+plt.ylabel("Feature Name")
+plt.show()
+
+#Now I am trying to find the optimal combination of models for the level 0 anbd level 1 classifiers (taken from https://towardsdatascience.com/a-deep-dive-into-stacking-ensemble-machine-learning-part-ii-69bfc0d6e53d)
+#For this to work properly I need to create new clas or function that does what a stackingmodel does. SO encompassing all the stuff I have done above into a single model.
 
 
-stacking_classifier = StackingClassifier(estimators=list(level_0_classifiers.items()), final_estimator=level_1_classifier, cv=tscv, passthrough=True, stack_method="predict_proba")
+def power_set(items: Iterable, min_length : int = 0) -> list:
+    list_of_tuples = list(powerset(items))
+    list_of_lists = [list(elem) for elem in list_of_tuples]
 
-#Creating column names for all the level 0 base classifiers
-level_0_columns = [f"{name}_prediction" for name in level_0_classifiers.keys()]
-pd.DataFrame(stacking_classifier.fit_transform(X_train, y_train), columns=level_0_columns + list(X_train.columns))
+    return [list for list in list_of_lists if len(list)>=min_length]
 
-
-test = pd.DataFrame(stacking_classifier.fit_transform(X_train, y_train))
-####################################
-#Training Base Models
-####################################
-
-#Generating prediction from the randomforest model
-rf_model = RandomForestClassifier(**rf_study.best_params, random_state=41)
-
-#Predicting the outcome of the test data
-rf_model.fit(X_train, y_train)
-rf_predictions_prob = pd.DataFrame(rf_model.predict_proba(X_test))
-
-#Creating new column that gives the class prediction
-rf_predictions_prob["prediction"] = rf_model.predict(X_test)
-
-#Getting the best scores from the study
-rf_study.best_value
-
-y_train.value_counts(normalize=True)
-
-rf_predictions_prob["prediction"].value_counts(normalize=True)
-
-#adding y_test predictions to the dataframe
-rf_predictions_prob = pd.concat([rf_predictions_prob, pd.DataFrame(y_test).reset_index(drop=True)], axis=1)
-
-#When class are equal then flagging 1, else 0
-#when prediction is equal to the result then flagging 1, else 0
-rf_predictions_prob["correct_prediction"] = rf_predictions_prob["prediction"] == rf_predictions_prob["result"]  
-
-rf_predictions_prob['correct_prediction'] = rf_predictions_prob.apply(lambda row: 1 if row["prediction"] == row["result"] else 0, axis=1)
-
-rf_predictions_prob['correct_prediction'].mean()
+power_set(list(level_0_classifiers.keys()), 2)
 
 
-rf_predictions_prob["correct_prediction"] = rf_predictions_prob["prediction"] == rf_predictions_prob["result"]
+param_grid = dict()
+param_grid["estimators"] = power_set(list(level_0_classifiers.items()), 2)
+param_grid["final_estimator"] = list(level_0_classifiers.values())
+param_grid["passthrough"] = [True, False]
+param_grid["stack_method"] = ["predict", "predict_proba"]
 
-rf_predictions_prob["prediction"].value_counts()
-
-y_test.value_counts(normalize=True)   
-
-#Concatenating the prediction probabilities with the actual result
-rf_predictions_prob = pd.concat([rf_predictions_prob, pd.DataFrame(y_test)], axis=1)
-
-#Creating a classification report
-print(classification_report(y_test, rf_predictions_prob["prediction"]))
+pre_defined_split = PredefinedSplit(test_fold = [-1 if x in X_train.index else 0 for x in X.index])
+grid_search = GridSearchCV(estimator=stacking_model, param_grid=param_grid, scoring="accuracy", cv=tscv, verbose=10)
+grid_search_results = grid_search.fit(X, y)
 
 
-rf_predictions_prob = pd.merge(rf_predictions_prob, pd.DataFrame(y_test), left_index=True, right_index=True)
 
 
-rf_predictions_prob.columns = rf_model.classes_
 
 
-#Each of the individual models will now be trained on the entire dataset using the best parameters found above (Maybe done using stacking classifier)
-# rf_best_model.fit(X_train, y_train)
-# gb_best_model.fit(X_train, y_train)
-# svc_best_model.fit(X_train, y_train)
-# knn_best_model.fit(X_train, y_train)
+
+
+
+#Finally to see whether the stacked model was actually worth doing, I will compare the accuracy of the stacked model to the accuracy of the base models
+print(f"Accuracy of scikit-learn stacking classifier: {accuracy_score(y_test, y_pred_stacked)}")
+
+for name, classifier in level_0_classifiers.items():
+    classifier_ = cp.deepcopy(classifier)
+    classifier_.fit(X_train, y_train)
+
+    print(f"Accuracy of standalone {name} classifier: {accuracy_score(y_test, classifier_.predict(X_test_scaled.drop(labels=['index_number'], axis=1)))}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Now implementing a technique to find the optimal threshold for the stacked model
+#This is done by finding the threshold that maximises the f1 score
+#This is done by finding the threshold that maximises the f1 score
+
+#Getting the probability predictions for the test data
+# y_pred_proba_stacked = level_1_classifier.predict_proba(X_test_stacked.drop(labels=["index_number"], axis=1))
+
+
+# #Getting the f1 score for each threshold
+# f1_scores = []
+# thresholds = np.linspace(0,1,100)
+
+# for i in range(len())
+# for threshold in thresholds:
+#     y_pred_stacked_thresh = np.where(y_pred_proba_stacked[:,1] > threshold, 1, 0)
+#     f1_scores.append(f1_score(y_test, y_pred_stacked_thresh))
+    
+# #Plotting the f1 scores against the thresholds
+# plt.figure(figsize=(10,10))
+# plt.plot(thresholds, f1_scores)
+# plt.title("F1 Score vs Threshold")
+# plt.xlabel("Threshold")
+# plt.ylabel("F1 Score")
+# plt.show()
+
+# #Getting the threshold that maximises the f1 score
+# threshold_optimal = thresholds[np.argmax(f1_scores)]
+# print(f"The optimal threshold is {threshold_optimal}")
+
+# #Getting the predictions for the optimal threshold
+# y_pred_stacked_thresh = np.where(y_pred_proba_stacked[:,1] > threshold_optimal, 1, 0)
+
+# #classification report
+# print(classification_report(y_test, y_pred_stacked_thresh))
+
+    

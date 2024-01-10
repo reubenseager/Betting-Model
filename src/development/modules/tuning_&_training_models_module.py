@@ -8,8 +8,17 @@ The models that I am planning to use are:
     - k-NN Classifier (Done)
     - SVM (Support Vector Machine) (Done)
     - Naive Bayes Network (PGMPY Implemntation)
-    - Neural Network (Keras Implemntation)
     - CatBoost (Look into this)
+    
+Try also using some true probabilistic models such as:
+    - Bayesian Network (PGMPY Implemntation)
+    - Naive Bayes
+    - Neural Network (Keras Implemntation)
+    -LSTM (Think this would work well as it is a time series problem)
+
+These models use a probabilitic frame work and work in a different way. This should help improve the performance of the stacked ensemble model as the models are more different.    
+https://machinelearningmastery.com/probability-calibration-for-imbalanced-classification/
+https://scikit-learn.org/stable/modules/generated/sklearn.calibration.CalibratedClassifierCV.html
     
 Finally I am planning to use a final meta learner to combine the outputs of the models mentioned above.
 This model will then be stored so that it can be used later on. I also might want to retrain the model as I get new data as more games are played.
@@ -49,7 +58,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.decomposition import PCA
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 
 #Base models
 from sklearn.ensemble import RandomForestClassifier
@@ -57,6 +66,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 # from xgboost import XGBClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier, NeighborhoodComponentsAnalysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.naive_bayes import GaussianNB
 from pgmpy.models import BayesianNetwork
 from tensorflow import keras
@@ -323,6 +333,58 @@ knn_best_score = knn_study.best_value
 #fitting knn model using the best parameters
 # knn_best_model = KNeighborsClassifier(**knn_best_params)
 # knn_best_model.fit(X_train, y_train)
+
+
+####################
+#Dim Reduction + KNN Classifier
+####################
+def dimred_knn_objective(trial):
+    #https://www.kaggle.com/discussions/general/271613
+    #Parameters to tune
+    n_neighbors = trial.suggest_int("n_neighbors", 1, 100)
+    weights = trial.suggest_categorical("weights", ["distance"])
+    leaf_size = trial.suggest_int("leaf_size", 1, 100)
+    p = trial.suggest_int("p", 1, 10)
+    metric = trial.suggest_categorical("metric", ["minkowski"]) #Should probably look at more distance metrics here
+    dim_red = trial.suggest_categorical("comp_analysis", ["PCA", "LDA", "NCA", None])
+        
+    #Dimensionality reduction
+    if dim_red == "PCA":
+        n_components=trial.suggest_int("pca_n_components", 1, min(X_train.shape)) # suggest an integer from 2 to 30
+        dimen_red_algorithm=PCA(n_components=n_components, random_state=41)
+    elif dim_red == "LDA":
+        n_components=trial.suggest_int("lda_n_components", 1, 2)
+        dimen_red_algorithm=LinearDiscriminantAnalysis(n_components=n_components)
+    elif dim_red == "NCA":
+        n_components=trial.suggest_int("nca_n_components", 1, min(X_train.shape))
+        dimen_red_algorithm=NeighborhoodComponentsAnalysis(n_components=n_components, random_state=41)
+    else:
+        dimen_red_algorithm='passthrough'
+        
+    knn = KNeighborsClassifier(n_neighbors=n_neighbors,
+                                        weights=weights,
+                                        leaf_size=leaf_size,
+                                        p=p,
+                                        metric=metric)
+    
+    # -- Make a pipeline
+    pipeline = make_pipeline(dimen_red_algorithm, knn)
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(pipeline, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+#Create study object
+dimred_knn_study = optuna.create_study(direction="maximize", study_name="dimred kNN study")
+dimred_knn_study.optimize(dimred_knn_objective, n_trials=500, show_progress_bar=True)
+
+#Returing the best score
+dimred_knn_best_score = dimred_knn_study.best_value
+
+#Saving the study so it can be used later on
+joblib.dump(dimred_knn_study, f"data/intermediate/model_studies/dimred_knn_study.pkl")
+
+
 
 ####################
 #Naive Bayes Network
