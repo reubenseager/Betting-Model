@@ -14,7 +14,7 @@ Try also using some true probabilistic models such as:
     - Bayesian Network (PGMPY Implemntation)
     - Naive Bayes
     - Neural Network (Keras Implemntation)
-    -LSTM (Think this would work well as it is a time series problem)
+    -LSTM (Think this would work well as it is a time series problem) (Seems to do very well for other people.)(https://github.com/krishnakartik1/LSTM-footballMatchWinner)
 
 These models use a probabilitic frame work and work in a different way. This should help improve the performance of the stacked ensemble model as the models are more different.    
 https://machinelearningmastery.com/probability-calibration-for-imbalanced-classification/
@@ -41,6 +41,12 @@ https://pdf.sciencedirectassets.com/280203/1-s2.0-S1877050922X00070/1-s2.0-S1877
 
 https://www.kaggle.com/code/marketneutral/purged-time-series-cv-xgboost-optuna
 Remember that once I have found the optimal hyperparameters for the models, I need to retrain the models on the entire dataset. This is because the hyperparameters are tuned to the training data and not the entire dataset.
+
+#Possibly look at upsampling the draw outcomes as this is the worst performing outcome.
+ Eryarsoy and Delen (2019) was the first study to address the poor
+performance on draw outcomes by applying SMOTE (Chawla et al., 2002).
+https://arno.uvt.nl/show.cgi?fid=160932
+
 """
 #Imports
 
@@ -265,7 +271,7 @@ svc_study.optimize(svc_objective, n_trials=50, show_progress_bar=True) #Reducing
 
 #Saving the study so it can be used later on
 joblib.dump(svc_study, f"data/intermediate/model_studies/svc_study.pkl")
-svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")   #Loading in the study
+#svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")   #Loading in the study
 
 #Retuning the best parameters
 svc_best_params = svc_study.best_params
@@ -277,8 +283,6 @@ svc_best_score = svc_study.best_value
 #KNN Classifier
 ####################
 
-#look into using neighbourhood component analysis (NCA) as this is meant too wokr will. Seems liek a supervised version of PCA+KNN doesn
-#(https://scikit-learn.org/stable/auto_examples/neighbors/plot_nca_dim_reduction.html)
 def knn_objective(trial):
     
     #Adding a PCA step to the pipeline to see the effect of dimensionality reduction
@@ -338,8 +342,10 @@ knn_best_score = knn_study.best_value
 ####################
 #Dim Reduction + KNN Classifier
 ####################
+#(https://scikit-learn.org/stable/auto_examples/neighbors/plot_nca_dim_reduction.html)
+#https://www.kaggle.com/discussions/general/271613
+
 def dimred_knn_objective(trial):
-    #https://www.kaggle.com/discussions/general/271613
     #Parameters to tune
     n_neighbors = trial.suggest_int("n_neighbors", 1, 100)
     weights = trial.suggest_categorical("weights", ["distance"])

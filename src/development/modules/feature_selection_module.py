@@ -1,5 +1,10 @@
 """
     The purpose of the script is to look at which features to select for the model. This should not need to be ru each time, and so is not included in the primary processing.
+
+    #TODO: Should do some correlation analysis to see if there are any features that are highly correlated with each other. If there are, then I should only keep one of them. This will help to reduce the number of features in the model, and also help to reduce the risk of overfitting.
+
+
+
 """
 
 # Imports

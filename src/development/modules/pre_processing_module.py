@@ -47,6 +47,24 @@ live_betting_odds_folder = Path(intermediate, "live_betting_odds")
 #TODO = Look at adding in betting predictors from the different sports books as features in the model.
 #TODO = Elo weighted passed performance of points. 
 #TODO = Do they do well against these types of teams.Group teams on style. Maybe do some clusteirng on teams to find similar
+
+
+
+
+#TODO = Features that other people have found useful:
+#Fifa ratings (Dunno how I would get this data but seems to be important in other models)(https://arno.uvt.nl/show.cgi?fid=160932)
+#Difference in league positiojn
+#Home team goal difference
+#Away team goal difference
+#Difference in points
+#Home team points
+#Away Team Points
+#Days since last game
+#percentage of possible points
+#formation consistency
+#promotion status
+#It appears that differential features may be superior to features for home and away. Thisn is because they have better univariate distribution and reduced dimensions (https://arno.uvt.nl/show.cgi?fid=160932) (baboota and kaur pdf)
+
 # pipeline stuff: https://www.freecodecamp.org/news/machine-learning-pipeline/
 
 
