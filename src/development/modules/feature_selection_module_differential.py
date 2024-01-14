@@ -2,44 +2,45 @@
     The purpose of the script is to look at which features to select for the model. This should not need to be ru each time, and so is not included in the primary processing.
 
     #TODO: Should do some correlation analysis to see if there are any features that are highly correlated with each other. If there are, then I should only keep one of them. This will help to reduce the number of features in the model, and also help to reduce the risk of overfitting.
+    #TODO: Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
 
 
 
 """
 
 # Imports
-# Math and data manipulation imports
+#Directories and File Management
 import os
 from pathlib import Path
-
-import pandas as pd  # Package for data manipulation and analysis
-import numpy as np # Package for scientific computing
+import joblib
 import pyarrow.feather as feather   # Package to store dataframes in a binary format
 
+#Data Manipulation
+import pandas as pd  # Package for data manipulation and analysis
+import numpy as np # Package for scientific computing
+
 #Machine Learning Imports
-#Train test split
+#Preprocessing
 from sklearn import preprocessing
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import TimeSeriesSplit
+
+#Feature Selection Models
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
-
 from sklearn.linear_model import Lasso
 
-#Saling
-from sklearn.preprocessing import StandardScaler
-import joblib
-
-
 #Feature Selection
-from sklearn.feature_selection import RFE #Not using the CV version as I am using time series data. Not sure if this is right though.
-from sklearn.feature_selection import RFECV
+from sklearn.feature_selection import RFE, RFECV
 
+#Visualisation
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+#Setting the working directory
 os.getcwd()
 os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
 
@@ -53,10 +54,8 @@ output = Path.cwd() / "data" / "output"
 ####################################
 #Feature Selection
 ###################################
-#TODO = Look at using Genetic algorithms for feature selection (https://towardsdatascience.com/feature-selection-with-genetic-algorithms-7dd7e02dd237#:~:text=Genetic%20algorithms%20use%20an%20approach,model%20for%20the%20target%20task.)
 
 #Reading in the data that will be used in the model
-
 #input_data = feather.read_feather(f"{intermediate}/all_football_data.feather")
 input_data = feather.read_feather(f"{intermediate}/all_football_data_differential.feather")
 
@@ -64,9 +63,6 @@ input_data = feather.read_feather(f"{intermediate}/all_football_data_differentia
 input_data = input_data.sort_values(by="date", ascending=True)
 input_data.set_index("date", inplace=True)
 
-#Saving prescaled input data using feather
-#feather.write_feather(input_data, f"{intermediate}/input_data.feather")
-#feather.write_feather(input_data, f"{intermediate}/input_data.feather")
 
 #Splitting the data into test and train datasets. This needs to be done before any feature selection is done to avoid data leakage
 X_train, X_test, y_train, y_test = train_test_split(input_data.drop(columns=["result"], axis=1), input_data["result"], test_size=0.15, shuffle=False) #Setting shuffle to false, again to prevent data leakage
@@ -160,6 +156,6 @@ print(X_train_scaled.columns[~feature_mask])
 fs_columns = X_train_scaled.columns[feature_mask].tolist()
 
 #joblib.dump(fs_columns, f"{intermediate}/fs_columns.pkl")
-joblib.dump(fs_columns, f"{intermediate}/fs_columns_differential.pkl")
+joblib.dump(fs_columns, f"{intermediate}/fs_columns_differentials.pkl")
 
 #fs_columns = joblib.load(f"{intermediate}/fs_columns.save")

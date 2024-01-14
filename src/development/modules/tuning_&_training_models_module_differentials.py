@@ -58,6 +58,7 @@ import joblib
 
 #Model preparation
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
@@ -73,7 +74,8 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier, NeighborhoodComponentsAnalysis
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import GaussianNB, ComplementNB
+from sklearn.linear_model import LogisticRegression
 from pgmpy.models import BayesianNetwork
 from tensorflow import keras
 
@@ -83,7 +85,12 @@ from sklearn.ensemble import StackingClassifier
 
 #Hyperparameter tuning
 import optuna   #You can get a progress bar for optuna
-import optuna_dashboard
+
+#Visualisation
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
 
 #Model evaluation
 from sklearn.calibration import calibration_curve
@@ -91,7 +98,7 @@ from sklearn.metrics import roc_curve, auc, accuracy_score, confusion_matrix, cl
 
 from sklearn.metrics import precision_recall_curve, average_precision_score, f1_score, precision_score
 
-
+#Setting the working directory
 os.getcwd()
 os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
 
@@ -101,25 +108,28 @@ raw = Path.cwd() / "data" / "raw"
 intermediate = Path.cwd() / "data" / "intermediate"
 output = Path.cwd() / "data" / "output"   
 
-#Location to save the trained studies
-Path("data/intermediate/model_studies").mkdir(exist_ok=True)
+#Location to save the trained studies (New folder for the differentials studies)
+#Path("data/intermediate/model_studies").mkdir(exist_ok=True)
+Path("data/intermediate/model_studies_differentials").mkdir(exist_ok=True)
+
+retrain_models = False #This is a flag to determine whether the models should be retrained or not. If this is set to false then the models will be loaded in from the model folder
 
 ####################################
 #Reading in the data
-####################################
+####################################§
 
 #Loading in feature selected columns
-fs_columns = joblib.load(f"{intermediate}/fs_columns.save")
+fs_columns = joblib.load(f"{intermediate}/fs_columns_differentials.pkl")
 
 #Reading in the data that will be used in the model
-input_data = pd.read_feather(f"{intermediate}/input_data.feather")
+input_data = feather.read_feather(f"{intermediate}/all_football_data_differential.feather")
 
-#Sorting index to make sure that the data is in chronological order
-input_data = input_data.sort_index()
+input_data = input_data.sort_values(by="date", ascending=True)
+input_data.set_index("date", inplace=True)
+
 
 #Reducing the data to only the feature selected columns. W
 input_data_fs = input_data[fs_columns + ["result"]]
-#input_data_fs = input_data
 
 #I will be using cross validation but I need to make sure that I hold out some test data for the final testing of the model. This is what I'm splitting out at this stage
 #I'm holding back 10% of the data for final testing of the model
@@ -129,7 +139,7 @@ X_train, X_test, y_train, y_test = train_test_split(input_data_fs.drop(columns=[
 #Scaling the data. This scaler will also be applied to the test data
 scaler = StandardScaler() #Creating the scaler object
 
-joblib.dump(scaler, f"{intermediate}/scaler.pkl") #Saving the scaler object so it can be used on the test data
+#joblib.dump(scaler, f"{intermediate}/scaler.pkl") #Saving the scaler object so it can be used on the test data
 
 scaler.fit(X_train) #Fitting the scaler object to the training data
 X_train = pd.DataFrame(scaler.transform(X_train), columns=X_train.columns, index = X_train.index)#scaling the training data
@@ -174,17 +184,18 @@ def rf_objective(trial):
     f1_macro = cross_val_score(rf, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
     return f1_macro
 
-#Create study object
-rf_study = optuna.create_study(direction="maximize", study_name="Random Forest Study")
-rf_study.optimize(rf_objective, n_trials=200, show_progress_bar=True)
-
-#Saving the study so it can be used later on
-joblib.dump(rf_study, f"data/intermediate/model_studies/rf_study.pkl")
-rf_study = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")   #Loading in the study
+if retrain_models == True:
+    #Create study object
+    rf_study = optuna.create_study(direction="maximize", study_name="Random Forest Study")
+    rf_study.optimize(rf_objective, n_trials=200, show_progress_bar=True)
+    
+    #Saving the study so it can be used later on
+    joblib.dump(rf_study, f"data/intermediate/model_studies_differentials/rf_study.pkl")
+else:
+    rf_study = joblib.load(f"data/intermediate/model_studies_differentials/rf_study.pkl")
 
 #Retuning the best parameters
 rf_best_params = rf_study.best_params
-
 #returing the best score
 rf_best_score = rf_study.best_value
 
@@ -216,17 +227,18 @@ def gb_objective(trial):
     f1_macro = cross_val_score(gb, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
     return f1_macro
 
-#Create study object
-gb_study = optuna.create_study(direction="maximize", study_name="Gradient Boosting Classifier Study")
-gb_study.optimize(gb_objective, n_trials=200, show_progress_bar=True)
-
-#Saving the study so it can be used later on
-joblib.dump(gb_study, f"data/intermediate/model_studies/gb_study.pkl")
-gb_study = joblib.load(f"data/intermediate/model_studies/gb_study.pkl")   #Loading in the study
+if retrain_models == True:
+    #Create study object
+    gb_study = optuna.create_study(direction="maximize", study_name="Gradient Boosting Classifier Study")
+    gb_study.optimize(gb_objective, n_trials=200, show_progress_bar=True)
+    
+    #Saving the study so it can be used later on
+    joblib.dump(gb_study, f"data/intermediate/model_studies_differentials/gb_study.pkl")
+else:
+    gb_study = joblib.load(f"data/intermediate/model_studies_differentials/gb_study.pkl")
 
 #Retuning the best parameters
 gb_best_params = gb_study.best_params
-
 #Returing the best score
 gb_best_score = gb_study.best_value
 
@@ -265,79 +277,20 @@ def svc_objective(trial):
     f1_macro = cross_val_score(svc, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
     return f1_macro
 
-#Create study object
-svc_study = optuna.create_study(direction="maximize", study_name="SVC study")
-svc_study.optimize(svc_objective, n_trials=50, show_progress_bar=True) #Reducing the number of trials as this appears to be a very computationally expensive model
-
-#Saving the study so it can be used later on
-joblib.dump(svc_study, f"data/intermediate/model_studies/svc_study.pkl")
-#svc_study = joblib.load(f"data/intermediate/model_studies/svc_study.pkl")   #Loading in the study
-
+if retrain_models == True:
+    #Create study object
+    svc_study = optuna.create_study(direction="maximize", study_name="SVC study")
+    svc_study.optimize(svc_objective, n_trials=50, show_progress_bar=True) #Reducing the number of trials as this appears to be a very computationally expensive model
+    
+    #Saving the study so it can be used later on
+    joblib.dump(svc_study, f"data/intermediate/model_studies_differentials/svc_study.pkl")
+else:
+    svc_study = joblib.load(f"data/intermediate/model_studies_differentials/svc_study.pkl")
+    
 #Retuning the best parameters
 svc_best_params = svc_study.best_params
-
 #Returing the best score
 svc_best_score = svc_study.best_value
-
-####################
-#KNN Classifier
-####################
-
-def knn_objective(trial):
-    
-    #Adding a PCA step to the pipeline to see the effect of dimensionality reduction
-
-    #Parameters to tune
-    n_neighbors = trial.suggest_int("n_neighbors", 1, 100)
-    weights = trial.suggest_categorical("weights", ["distance"])
-    leaf_size = trial.suggest_int("leaf_size", 1, 100)
-    p = trial.suggest_int("p", 1, 10)
-    metric = trial.suggest_categorical("metric", ["minkowski"])
-    
-    #use_pca = trial.suggest_categorical("use_pca", [True, False])
-    
-    #Create the pipeline with hyperparameters
-    # steps = [
-    #     ('classifier', KNeighborsClassifier(n_neighbors=n_neighbors,
-    #                                         weights=weights,
-    #                                         leaf_size=leaf_size,
-    #                                         p=p,
-    #                                         metric=metric))
-    # ]
-    knn = KNeighborsClassifier(n_neighbors=n_neighbors,
-                                            weights=weights,
-                                            leaf_size=leaf_size,
-                                            p=p,
-                                            metric=metric)
-    # if use_pca:
-    #     n_components = trial.suggest_int('n_components', 1, min(X_train.shape))
-    #     steps.insert(0, ('pca', PCA(n_components=n_components))) #Inserting the PCA step at the start of the pipeline
-        
-    #Creating the pipeline
-    #knn = Pipeline(steps)
-    
-    #Return time series cross validation f1 score
-    f1_macro = cross_val_score(knn, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
-    return f1_macro
-
-#Create study object
-knn_study = optuna.create_study(direction="maximize", study_name="kNN study")
-knn_study.optimize(knn_objective, n_trials=500, show_progress_bar=True)
-
-#Saving the study so it can be used later on
-joblib.dump(knn_study, f"data/intermediate/model_studies/knn_study.pkl")
-
-#Retuning the best parameters
-knn_best_params = knn_study.best_params
-knn_study = joblib.load(f"data/intermediate/model_studies/knn_study.pkl")   #Loading in the study
-
-#Returing the best score
-knn_best_score = knn_study.best_value
-
-#fitting knn model using the best parameters
-# knn_best_model = KNeighborsClassifier(**knn_best_params)
-# knn_best_model.fit(X_train, y_train)
-
 
 ####################
 #Dim Reduction + KNN Classifier
@@ -380,39 +333,173 @@ def dimred_knn_objective(trial):
     f1_macro = cross_val_score(pipeline, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
     return f1_macro
 
-#Create study object
-dimred_knn_study = optuna.create_study(direction="maximize", study_name="dimred kNN study")
-dimred_knn_study.optimize(dimred_knn_objective, n_trials=500, show_progress_bar=True)
+if retrain_models == True:
+    #Create study object
+    dimred_knn_study = optuna.create_study(direction="maximize", study_name="dimred kNN study")
+    dimred_knn_study.optimize(dimred_knn_objective, n_trials=500, show_progress_bar=True)
+    
+    #Saving the study so it can be used later on
+    joblib.dump(dimred_knn_study, f"data/intermediate/model_studies_differentials/dimred_knn_study.pkl")
+else:
+    dimred_knn_study = joblib.load(f"data/intermediate/model_studies_differentials/dimred_knn_study.pkl")
 
-#Returing the best score
+#Returning the best parameters
+dimred_knn_best_params = dimred_knn_study.best_params
+#Returning the best score
 dimred_knn_best_score = dimred_knn_study.best_value
 
-#Saving the study so it can be used later on
-joblib.dump(dimred_knn_study, f"data/intermediate/model_studies/dimred_knn_study.pkl")
+####################
+#Naive Bayes (Gaussian)
+####################
 
 
+#checking for correlation between the features
+
+
+plt.figure(figsize=(12,10))
+cor = X_train.corr().abs()
+sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+plt.show()
+
+def gnb_objective(trial):
+    
+    #This is the Gaussian Naive Bayes implementation
+    
+    #Parameters to tune
+    var_smoothing = trial.suggest_float("var_smoothing", 0.000000001, 0.0000001)
+    
+    gnb = GaussianNB(var_smoothing=var_smoothing)
+    
+    #Return time series cross validation f1 score
+    
+    #Trialing both the standard and reduced datasets
+        
+    f1_macro = cross_val_score(gnb, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+if retrain_models == True:
+    #Create study object
+    gnb_study = optuna.create_study(direction="maximize", study_name="gnb study")
+    gnb_study.optimize(gnb_objective, n_trials=200, show_progress_bar=True)
+    
+    #Saving the study so it can be used later on
+    joblib.dump(gnb_study, f"data/intermediate/model_studies_differentials/gnb_study.pkl")
+else:
+    gnb_study = joblib.load(f"data/intermediate/model_studies_differentials/gnb_study.pkl")
+    
+#Returning the best parameters
+gnb_study_best_params = gnb_study.best_params
+#Returning the best score
+gnb_study_best_score = gnb_study.best_value
+
+####################
+#Naive Bayes (Complement) (IF I WANNA USE THIS THEN I NEED TO CHANGE THE DATA TO BE POSITIVE. USE MINMAX SCALER)
+####################
+# def cnb_objective(trial):
+    
+#     #This is the Complement Naive Bayes implementation
+    
+#     #Parameters to tune
+#     alpha = trial.suggest_float("alpha", 0.0, 1.0)
+#     fit_prior = trial.suggest_categorical("fit_prior", [True, False])
+#     norm = trial.suggest_categorical("norm", [True, False])
+        
+#     cnb = ComplementNB(alpha=alpha, 
+#                        fit_prior=fit_prior, 
+#                        norm=norm)
+    
+#     #Return time series cross validation f1 score
+#     f1_macro = cross_val_score(cnb, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+#     return f1_macro
+
+# #Create study object
+# cnb_study = optuna.create_study(direction="maximize", study_name="cnb study")
+# cnb_study.optimize(cnb_objective, n_trials=200, show_progress_bar=True)
+
+# #Saving the study so it can be used later on
+# joblib.dump(cnb_study, f"data/intermediate/model_studies_differentials/cnb_study.pkl")
+
+# #Retuning the best parameters
+# cnb_study_best_params = cnb_study.best_params
+
+####################
+#Logistic Regression
+####################
+def lr_objective(trial):
+    
+    # Define all possible combinations of solver and penalty
+    solver_penalty_combinations = [
+        "newton-cg_l2", 
+        #"newton-cg_None", 
+        "lbfgs_l2", 
+        #"lbfgs_None", 
+        "liblinear_l1", 
+        "liblinear_l2", 
+        "sag_l2", 
+        #"sag_None", 
+        "saga_l1", 
+        "saga_l2", 
+        "saga_elasticnet", 
+        #"saga_None"
+    ]
+
+    # Suggest a combination
+    solver_penalty = trial.suggest_categorical("solver_penalty", solver_penalty_combinations)
+
+    # Split the string back into separate variables
+    solver, penalty = solver_penalty.split("_")
+        
+        
+    l1_ratio =  None
+
+    if penalty == "elasticnet":
+        l1_ratio = trial.suggest_float("l1_ratio", 0.0, 1.0)
+
+    # Other parameters...
+    C = trial.suggest_float("C", 0.001, 1000)
+    #l1_ratio = trial.suggest_float("l1_ratio", 0.0, 1.0)
+    max_iter = trial.suggest_int("max_iter", 50, 500000)
+    class_weight = trial.suggest_categorical("class_weight", ["balanced", None])
+    multi_class = trial.suggest_categorical("multi_class", ["auto"])
+    
+    lr = LogisticRegression(penalty=penalty,
+                            C=C,
+                            solver=solver,
+                            l1_ratio=l1_ratio,
+                            max_iter=max_iter,
+                            class_weight=class_weight,
+                            multi_class=multi_class,
+                            random_state=41)
+    
+    
+    #Return time series cross validation f1 score
+    f1_macro = cross_val_score(lr, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
+    return f1_macro
+
+if retrain_models == True:
+    #Create study object
+    lr_study = optuna.create_study(direction="maximize", study_name="lr study")
+    lr_study.optimize(lr_objective, n_trials=200, show_progress_bar=True)
+    
+    #Saving the study so it can be used later on
+    joblib.dump(lr_study, f"data/intermediate/model_studies_differentials/lr_study.pkl")
+else:
+    lr_study = joblib.load(f"data/intermediate/model_studies_differentials/lr_study.pkl")
+
+#Retuning the best parameters
+lr_study_best_params = lr_study.best_params
+#Returning the best score
+lr_best_score = lr_study.best_value
 
 ####################
 #Naive Bayes Network
 ####################
-def nbn_objective(trial):
 
-    nbn = 
-
-    
-    #Return time series cross validation f1 score
-    f1_macro = cross_val_score(nbn, X_train, y_train, cv=tscv, scoring="f1_macro").mean()
-    return f1_macro
-
-#Create study object
-nbn_study = optuna.create_study(direction="maximize", study_name="nbn study")
-nbn_study.optimize(knn_objective, n_trials=500, show_progress_bar=True)
-
-#Saving the study so it can be used later on
-joblib.dump(nbn_study, f"data/intermediate/model_studies/nbn_study.pkl")
-
-#Retuning the best parameters
-nbn_study_best_params = nbn_study.best_params
-nbn_study = joblib.load(f"data/intermediate/model_studies/nbn_study.pkl")   #Loading in the study
+####################
+#Artificial Neural Network
+####################
 
 
+####################
+#LSTM
+####################
