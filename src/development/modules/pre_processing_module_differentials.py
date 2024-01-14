@@ -33,6 +33,11 @@
 #TODO: The web scraping and ELO ratings scripts shouldn't need to be run more than once. I should be able to work from this script only.
 #TODO = Look at how using a window of 3 or 5 affects the model.(Ideally 3 would be better as it would mean less missing values)
 
+#TODO: I think I have some data leakage. I think some of the things like gd and weighted league position are using data from the game thats being played.
+#Think I need to shift them to the values of the previous game. So the current game will be the previous game and the previous game will be the game before that.
+
+
+
 """
 # Imports
 #Path and directory imports
