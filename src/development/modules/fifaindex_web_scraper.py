@@ -1,5 +1,8 @@
 #Imports
 
+#TODOD: I appear to have some country dataa in here, I think thats from the WC. Need to delete at some point
+
+
 #File management imports
 import os
 from pathlib import Path
@@ -7,7 +10,8 @@ import glob
 
 #Data manipulation imports
 import pandas as pd
-
+from datetime import datetime
+from dateutil.parser import parse
 #Web scraping imports
 import requests
 from bs4 import BeautifulSoup
@@ -158,6 +162,82 @@ for year in years:
 
 #List of dataframes to concatenate
 fifa_index_dfs = glob.glob(f"{webscraped_fifaindex_data}/fifa_index_*.feather")
-combined_fifa_index = pd.concat([pd.read_feather(f) for f in fifa_index_dfs], ignore_index=True)
 
-feather.write_feather(df=combined_fifa_index, dest=f"{webscraped_fifaindex_data}/combined_fifa_index.feather")
+combined_fifa_index = pd.concat([pd.read_feather(f) for f in fifa_index_dfs], ignore_index=True)
+#Converting the Date column to datetime
+combined_fifa_index['date'] = combined_fifa_index['Date'].apply(lambda x: parse(x))
+
+#Dropping the Date column
+combined_fifa_index.drop(['Date'], axis=1, inplace=True)
+
+team_list = combined_fifa_index["Team Name"].unique().tolist()
+
+country_list = ['Brazil', 'Germany', 'France', 'Spain', 'Argentina', 'Portugal', 'Belgium', 'Italy', 
+                'England', 'Uruguay', 'Poland', 'Croatia', 'Colombia', 'Mexico', 'Netherlands', 'Russia', 
+                'Chile', 'Denmark', 'Serbia', 'Switzerland', 'Sweden', 'Austria', 'Turkey', 'Peru', 
+                'Senegal', 'Morocco', 'Egypt', 'Japan', 'United States', 'Wales', 'Iceland']
+
+team_list = [x for x in team_list if x not in country_list]
+
+#Making sure that we don't haev multiple names for the same team
+replace_dict = {"Spurs": "Tottenham Hotspur", 
+                "Manchester Utd": "Manchester United",
+                "West Ham":"West Ham United", 
+                "Wolves":"Wolverhampton Wanderers",  
+                "Nott'm Forest":"Nottingham Forest",  
+                "Brighton":"Brighton & Hove Albion",  
+                "Newcastle Utd":"Newcastle United"}
+
+
+team_list = list(set([replace_dict.get(team, team) for team in team_list]))
+
+#Getting the min and max dates
+min_date = combined_fifa_index["date"].min()
+max_date = combined_fifa_index["date"].max()
+
+all_dates = pd.date_range(start=min_date, end=max_date, freq="D")
+
+all_dates = pd.DataFrame(all_dates, columns=["date"])
+
+
+fifa_index_dfs_all_dates = []
+
+
+for team_name in team_list:
+    
+    #selecting data for a specific team
+    team_df = combined_fifa_index[combined_fifa_index["Team Name"] == team_name]
+    
+    #left joining the team_df to the all_dates dataframe
+    team_df_all_dates = all_dates.merge(team_df, how="left", on="date")
+    
+    #filling the miss
+    team_df_all_dates["Team Name"].fillna(method="ffill", inplace=True)
+    
+    #Converting the columns to numeric so they can be interpolated
+    cols_to_convert = ['Att', 'Mid', 'Def', 'Ovr']
+    team_df_all_dates[cols_to_convert] = team_df_all_dates[cols_to_convert].apply(pd.to_numeric, errors='coerce')
+    
+    #Interpolate the missing data
+    team_df_all_dates["Att"] = team_df_all_dates["Att"].interpolate(method="linear")
+    team_df_all_dates["Mid"] = team_df_all_dates["Mid"].interpolate(method="linear")
+    team_df_all_dates["Def"] = team_df_all_dates["Def"].interpolate(method="linear")
+    team_df_all_dates["Ovr"] = team_df_all_dates["Ovr"].interpolate(method="linear")
+    
+    #Appending the dataframe to the fifa_index_dfs_all_dates list
+    fifa_index_dfs_all_dates.append(team_df_all_dates)
+    
+    
+    
+#Concatenating the dataframes in the fifa_index_dfs_all_dates list
+combined_fifa_index_all_dates = pd.concat(fifa_index_dfs_all_dates)
+
+#dropping the year column
+combined_fifa_index_all_dates.drop(["Year"], axis=1, inplace=True)
+
+#There shouldn't be any duplicate values as there should be a single value for a team on a specific date
+combined_fifa_index_all_dates.drop_duplicates(inplace=True)
+
+combined_fifa_index_all_dates.dropna(inplace=True) 
+
+feather.write_feather(df=combined_fifa_index_all_dates, dest=f"{webscraped_fifaindex_data}/combined_fifa_index.feather")

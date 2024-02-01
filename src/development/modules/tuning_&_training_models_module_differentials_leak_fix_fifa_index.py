@@ -110,7 +110,7 @@ output = Path.cwd() / "data" / "output"
 
 #Location to save the trained studies (New folder for the differentials studies)
 #Path("data/intermediate/model_studies").mkdir(exist_ok=True)
-model_studies_location = Path.cwd() / "data" / "intermediate" / "model_studies_differentials_leak_fix"
+model_studies_location = Path.cwd() / "data" / "intermediate" / "model_studies_differentials_leak_fix_fifa_index" #This is the location where the model studies will be saved
 model_studies_location.mkdir(exist_ok=True)
 retrain_models = True #This is a flag to determine whether the models should be retrained or not. If this is set to false then the models will be loaded in from the model folder
 
@@ -124,7 +124,7 @@ fs_columns = joblib.load(f"{intermediate}/fs_columns_differentials_leak_fix.pkl"
 
 #Reading in the data that will be used in the model
 #input_data = feather.read_feather(f"{intermediate}/all_football_data_differential.feather")
-input_data = feather.read_feather(f"{intermediate}/all_football_data_differential_leak_fix.feather")
+input_data = feather.read_feather(f"{intermediate}/all_football_data_differential_leak_fix_fifa_index.feather")
 
 input_data = input_data.sort_values(by="date", ascending=True)
 input_data.set_index("date", inplace=True)
@@ -149,10 +149,10 @@ input_data_fs = input_data_fs[[col for col in input_data_fs.columns if col.endsw
 
 
 #Seeing how the model does wihtout these features as I can get much more data if I drop them
-input_data_fs.drop(columns = ['xg_rolling_differential', 
-                              'xga_rolling_differential',
-                              'npxg_rolling_differential',
-                              'dist_rolling_differential'], inplace=True)
+# input_data_fs.drop(columns = ['xg_rolling_differential', 
+#                               'xga_rolling_differential',
+#                               'npxg_rolling_differential',
+#                               'dist_rolling_differential'], inplace=True)
 
 #I will be using cross validation but I need to make sure that I hold out some test data for the final testing of the model. This is what I'm splitting out at this stage
 #I'm holding back 10% of the data for final testing of the model
@@ -225,9 +225,9 @@ rf_best_params = rf_study.best_params
 #returing the best score
 rf_best_score = rf_study.best_value
 
-rf_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix first run/rf_study.pkl")
+#rf_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix/rf_study.pkl")
 
-rf_study_cheat_best_score = rf_study_cheat.best_value
+#rf_study_cheat_best_score = rf_study_cheat.best_value
 
 # rf_study_orig = joblib.load(f"data/intermediate/model_studies/rf_study.pkl")
 # rf_study_orig_best_score = rf_study_orig.best_value
@@ -274,6 +274,10 @@ else:
 gb_best_params = gb_study.best_params
 #Returing the best score
 gb_best_score = gb_study.best_value
+
+# gb_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix/gb_study.pkl")
+
+# gb_study_cheat_best_score = gb_study_cheat.best_value
 
 
 ####################
@@ -325,6 +329,12 @@ else:
 svc_best_params = svc_study.best_params
 #Returing the best score
 svc_best_score = svc_study.best_value
+
+# svc_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix/svc_study.pkl")
+
+# svc_study_cheat_best_score = svc_study_cheat.best_value
+
+
 
 ####################
 #Dim Reduction + KNN Classifier
@@ -383,10 +393,10 @@ dimred_knn_best_params = dimred_knn_study.best_params
 dimred_knn_best_score = dimred_knn_study.best_value
 
 
-# knn_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix first run/dimred_knn_study.pkl")
-# knn_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials/dimred_knn_study.pkl")
+#knn_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix/dimred_knn_study.pkl")
+#knn_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials/dimred_knn_study.pkl")
 
-# knn_study_cheat_best_score = knn_study_cheat.best_value
+#knn_study_cheat_best_score = knn_study_cheat.best_value
 
 
 ####################
@@ -475,7 +485,7 @@ gnb_study_best_params = gnb_study.best_params
 #Returning the best score
 gnb_study_best_score = gnb_study.best_value
 
-# gnb_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials/dimred_knn_study.pkl")
+#gnb_study_cheat = joblib.load(f"data/intermediate/model_studies_differentials_leak_fix/dimred_gnb_study.pkl")
 
 # gnb_study_cheat_best_score = gnb_study_cheat.best_value
 
@@ -577,6 +587,9 @@ else:
 lr_study_best_params = lr_study.best_params
 #Returning the best score
 lr_best_score = lr_study.best_value
+
+
+
 
 ####################
 #Naive Bayes Network

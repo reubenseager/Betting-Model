@@ -22,9 +22,9 @@
         - Form Diff (This is a custome function that they have created. It is essentially a short term form metric)
         - Home Form
         - Away Form
-        - STKPP (Shot on target k games past performance)
+        - STKPP (Shot on target k games past performance) (Done)
         - GD Diff (Goal difference differential) (Done)
-        - RelMidField (This si relative midfield strength. This was webscraped from www.fifaindex.com)
+        - RelMidField (This si relative midfield strength. This was webscraped from www.fifaindex.com) (Done)
         - CKPP (Corner kick k games past performance)
         - GKPP (Goal kick k games past performance)
         - ATGD (Away team goal difference) (Done)
@@ -109,6 +109,7 @@ elo_data_folder = Path(intermediate, "elo_data")
 webscraped_football_data_folder = Path(intermediate, "webscraped_football_data_no_xg")
 historical_betting_odds = Path(intermediate, "historical_betting_odds")
 live_betting_odds_folder = Path(intermediate, "live_betting_odds")
+webscraped_fifa_index_data_folder = Path(intermediate, "webscraped_fifaindex_data")
 
 #Window Size
 
@@ -131,6 +132,8 @@ match_data_all_teams  = pd.read_feather(f"{webscraped_football_data_folder}/matc
 elo_ratings_all_teams = pd.read_feather(f"{elo_data_folder}/elo_ratings_all_teams.feather")
 historical_betting_all_teams = pd.read_feather(f"{historical_betting_odds}/all_historical_betting_data.feather")
 live_betting_all_teams = pd.read_feather(f"{live_betting_odds_folder}/all_match_odds.feather")
+combined_fifa_index = pd.read_feather(f"{webscraped_fifa_index_data_folder}/combined_fifa_index.feather")
+
 team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx").drop_duplicates()
 
 #Converting the different date columns to datetime format
@@ -138,6 +141,7 @@ match_data_all_teams['date'] = match_data_all_teams['date'].apply(lambda x: x.da
 elo_ratings_all_teams["date"]= elo_ratings_all_teams["date"].apply(lambda x: x.date())
 historical_betting_all_teams["date"]= historical_betting_all_teams["date"].apply(lambda x: x.date())
 live_betting_all_teams["date"]= live_betting_all_teams["date"].apply(lambda x: x.date())
+combined_fifa_index["date"]= combined_fifa_index["date"].apply(lambda x: x.date())
 
 
 ####################################
@@ -169,6 +173,9 @@ match_data_all_teams["game_id"] = match_data_all_teams.apply(
     axis=1
 )
 
+####################################
+#ELO Ratings
+####################################
 
 #Renaming the team names to the full team names that all the other datasets use in the elo_ratings_all_teams dataframe
 elo_ratings_all_teams = elo_ratings_all_teams.merge(team_name_lookup, how="left", left_on="club", right_on="alternate_name")
@@ -195,6 +202,25 @@ match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day"],
 #complete_data = complete_data.drop(columns=["match_team_names", "elo_team_names", "club", "gls", "index"], axis=1,   errors="ignore")
 
 ####################################
+#Fifa Index Ratings
+####################################
+
+combined_fifa_index = combined_fifa_index.merge(team_name_lookup, how="left", left_on="Team Name", right_on="alternate_name")
+
+#dropping elo_rank as it basically provides same info as elo_points
+combined_fifa_index = combined_fifa_index.drop(columns=["Team Name", "alternate_name"]).rename(columns={"correct_name": "fifa_team_name"})
+
+#Now merging the elo_df_all_dates dataframe to the match_df dataframe
+match_data_all_teams = match_data_all_teams.merge(combined_fifa_index, how="left", left_on=["team_full_name", "date"], right_on=["fifa_team_name", "date"]).drop(columns=["fifa_team_name"]).drop_duplicates()
+
+#forward filling the fifa index columns grouped by team name
+match_data_all_teams[["Att", "Mid", "Def", "Ovr"]] = match_data_all_teams.groupby("team_full_name")[["Att", "Mid", "Def", "Ovr"]].ffill()
+
+#Backwards filling the same columns as there are some early games missing
+match_data_all_teams[["Att", "Mid", "Def", "Ovr"]] = match_data_all_teams.groupby("team_full_name")[["Att", "Mid", "Def", "Ovr"]].bfill()
+
+
+####################################
 #DATA CLEANING
 ####################################
 #Here we are cleaning the data and creating features that will be used in the model
@@ -204,7 +230,7 @@ match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day"],
 match_data_all_teams.isnull().sum()
 
 #If dist is missing and has a nan value, then fill it with the highest value for that team. This is because dist being nan means the team has had no shots. Which should be punished by the model
-match_data_all_teams["dist"] = match_data_all_teams.groupby("team_full_name")["dist"].transform(lambda x: x.fillna(x.max()))
+#match_data_all_teams["dist"] = match_data_all_teams.groupby("team_full_name")["dist"].transform(lambda x: x.fillna(x.max()))
 
 #Again checking whether there are any missing values in the data
 match_data_all_teams.isnull().sum().sum()
@@ -312,7 +338,8 @@ def rolling_averages(group, cols, new_cols, window):
     #group = group.dropna() #Might unccoment this and do the dropping of values later on. Just to keep all the datsets the same length
     return group
 
-cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
+#cols_for_rolling = ["gf", "ga", "xg", "xga", "npxg" ,"points", "sh", "poss", "sot", "dist"]
+cols_for_rolling = ["gf", "ga", "points", "sh", "poss", "sot"]
 new_rolling_cols = [f"{col}_rolling" for col in cols_for_rolling]
 
 
@@ -419,8 +446,13 @@ match_data_all_teams = match_data_all_teams.merge(all_betting_data[[col for col 
 #Creating a dataset that contains the home and away data for a match on the same row
 
 #These are the columns that will be used for the home and away teams
-home_and_away_cols = ["team_full_name", "gf_rolling", "ga_rolling", "xg_rolling", "xga_rolling", "npxg_rolling", "points_rolling", "sh_rolling","perc_points_rolling",
-                      "poss_rolling", "sot_rolling", "dist_rolling", "gd" , "team_elo_points", "average_opponent_elo", "weighted_league_position", "cumulative_points"]
+# home_and_away_cols = ["team_full_name", "gf_rolling", "ga_rolling", "xg_rolling", "xga_rolling", "npxg_rolling", "points_rolling", "sh_rolling","perc_points_rolling",
+#                       "poss_rolling", "sot_rolling", "dist_rolling", "gd" , "team_elo_points", "average_opponent_elo", "weighted_league_position", "cumulative_points"]
+
+home_and_away_cols = ["team_full_name", 
+                      "gf_rolling", "ga_rolling", "points_rolling", "sh_rolling","perc_points_rolling","poss_rolling", "sot_rolling", "gd" , 
+                      "Att", "Mid", "Def", "Ovr",
+                      "team_elo_points", "average_opponent_elo", "weighted_league_position", "cumulative_points"]
 
 #These are the betting columns. They include information for both the home and away teams
 #betting_cols = [col for col in match_data_all_teams.columns if col.startswith("odds_")]
@@ -498,5 +530,6 @@ all_football_data = all_football_data[cols_for_model]
 #feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data.feather")
 #feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential.feather")
 #feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix.feather")
-feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix.feather")
+#feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix.feather")
+feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix_fifa_index.feather")
 

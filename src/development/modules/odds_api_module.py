@@ -162,8 +162,7 @@ for game in odds_json_week:
     match_odds_list.append(all_bookmaker_odds)  
     
 
-#Remving all_bookmaker_odds from memory as it is no longer needed
-del all_bookmaker_odds
+
 
 
 #Concatenating all the match odds dataframes together

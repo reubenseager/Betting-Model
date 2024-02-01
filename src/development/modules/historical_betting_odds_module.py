@@ -3,6 +3,28 @@ This script is used to create the historical betting odds dataset.
 
 
 """
+#Imports
+#File system management
+import os
+from pathlib import Path  
+
+#Data manipulation
+import pandas as pd
+import glob
+
+#File storage
+import pyarrow.feather as feather   # Package to store dataframes in a binary format
+
+
+#Setting the working directory
+os.getcwd()
+os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
+
+
+#Project directory locations
+raw = Path.cwd() / "data" / "raw"
+intermediate = Path.cwd() / "data" / "intermediate"
+output = Path.cwd() / "data" / "output"   
 
 #Creating the historical betting odds folder in the intermediate folder if it doesn't already exist
 Path(intermediate, "historical_betting_odds").mkdir(exist_ok=True)

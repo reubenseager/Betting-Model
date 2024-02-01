@@ -16,7 +16,7 @@ import pyarrow.feather as feather   # Package to store dataframes in a binary fo
 
 from tqdm import tqdm # Package to show progress bar
 
-
+#Setting the working directory
 os.getcwd()
 os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
 
@@ -33,15 +33,14 @@ webscraped_football_data_folder = Path(intermediate, "webscraped_football_data_n
 
 #Year Variables (getting extra data as I don't think I have enough if only looking back three years)
 latest_year = 2024
-# earlist_year = 2020
-earlist_year = 2014 #Theres no npxg at some point back in the data so will probs notread it in
+earliest_year = 2014 #Theres no npxg at some point back in the data so will probs notread it in
 
 
 reread_data = True #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
 
 #Re-read all data
 if reread_data :
-    years = years = list(range(latest_year, earlist_year, -1))
+    years = years = list(range(latest_year, earliest_year, -1))
 else :
     years = list(range(latest_year, latest_year - 1, -1))
 
@@ -139,8 +138,10 @@ integer_cols = ["gf", "ga", "sh", "sot", "poss", "gls"]
 match_data_all_teams[integer_cols] = match_data_all_teams[integer_cols].astype(int)
 
 #Dropping the distance and xg columns as I don't have them for all seasons
-
 match_data_all_teams.drop(columns=["xg", "xga"], inplace=True)
+
+#checking for null values
+print(match_data_all_teams.isnull().sum())
 
 #Saving the data to the intermediate library as a feather file
 feather.write_feather(df=match_data_all_teams, dest=f"{webscraped_football_data_folder}/match_data_all_teams.feather")
