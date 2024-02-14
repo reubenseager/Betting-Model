@@ -177,6 +177,7 @@ match_data_all_teams["game_id"] = match_data_all_teams.apply(
 #ELO Ratings
 ####################################
 
+#I think theres a chance I'm introducing some data leakage here. By using elo changes that occured on the day. Maybe just shift all the dates back one before joining.
 #Renaming the team names to the full team names that all the other datasets use in the elo_ratings_all_teams dataframe
 elo_ratings_all_teams = elo_ratings_all_teams.merge(team_name_lookup, how="left", left_on="club", right_on="alternate_name")
 
