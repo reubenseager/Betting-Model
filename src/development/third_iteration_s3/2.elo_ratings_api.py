@@ -3,43 +3,9 @@ This script is looking at getting ELO data from clubelo.com. This is a website t
 I will be using an API (Application Programming Interface) to get the data from the website. This is a way of getting data from a website without having to scrape it.
     
 """
-# Imports
-#File management imports
-import os
-from pathlib import Path
 
-#Math and data manipulation imports
-import pandas as pd  # Package for data manipulation and analysis
-import numpy as np # Package for scientific computing
-
-# Web scraping imports
-import requests  # Used to access and download information from websites
-from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
-import time # Package to slow down the webscraping process
-import io
-from tqdm import tqdm # Package to show progress bar
-
-#Data storage imports
-import pyarrow.feather as feather   # Package to store dataframes in a binary format
-
-#Setting the working directory
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
-
-#Project directory locations
-intermediate = Path.cwd() / "data" / "intermediate"
-
-#Start Date
-#start_date = "2017-01-01"
-#start_date = "2014-01-01"
-
-
-
-# Create a new directory called "dat" within the "intermediate" folder
-Path(intermediate, "elo_data").mkdir(exist_ok=True)
-
-#Naming the folder location
-elo_data_folder = Path(intermediate, "elo_data")
+#Setting this to be the location of the S3 bucket
+elo_data_folder = f"s3://{s3_bucket_name}/data/intermediate/elo_data"
 
 def elo_ratings_function(team_name):
     
@@ -88,7 +54,7 @@ def elo_ratings_function(team_name):
     elo_df_all_dates["club"] = elo_df_all_dates["club"].fillna(value=team_name)
     
     #Write the dataframe to a feather file
-    feather.write_feather(df=elo_df_all_dates, dest=f"{elo_data_folder}/{team_name}_elo_ratings.feather")
+    wr.s3.to_parquet(df=elo_df_all_dates, path=f"{elo_data_folder}/{team_name}_elo_ratings.parquet")
     
     time.sleep(10)  # A lot of websites allow scraping but don't want you to do it too quickly, so you don't slow down the website
 
@@ -110,7 +76,7 @@ for team in tqdm(teams, desc="Downloading the ELO data for the teams in our data
     elo_ratings_function(team)
                               
 #Concatenating all the elo dataframes together into a single dataframe            
-elo_ratings_all_teams = pd.concat([feather.read_feather(f"{elo_data_folder}/{team}_elo_ratings.feather") for team in teams], axis=0)
+elo_ratings_all_teams = pd.concat([wr.s3.read_parquet(f"{elo_data_folder}/{team}_elo_ratings.parquet") for team in teams], axis=0)
 
 #Convert the date column to a datetime object in the same format as the match data
 elo_ratings_all_teams["date"] = pd.to_datetime(elo_ratings_all_teams["date"], format="%Y-%m-%d")
@@ -127,7 +93,7 @@ elo_ratings_all_teams["club"] = elo_ratings_all_teams["club"].replace({"AstonVil
                                                                        "BristolCity": "Bristol City"})
 
 
-#Writing the elo_ratings_all_teams dataframe to a feather file
-feather.write_feather(df=elo_ratings_all_teams, dest=f"{elo_data_folder}/elo_ratings_all_teams.feather")
+#Writing the elo_ratings_all_teams dataframe to a parquet file
+wr.s3.to_parquet(df=elo_ratings_all_teams, path=f"{elo_data_folder}/elo_ratings_all_teams.parquet")
 
 print("ELO ratings data created successfully!")

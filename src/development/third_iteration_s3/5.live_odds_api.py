@@ -1,34 +1,14 @@
-import requests  # Used to access and download information from websites
-from functools import reduce  # Used to merge multiple dataframes together
-import pandas as pd
+"""
+This is a free to access subscription levels to the odds api, which allows me to make up to 500 requests per month (https://api.the-odds-api.com/)
 
-import os
-from pathlib import Path  
-from datetime import datetime, timedelta
-from dateutil import parser
+    
+"""
 
-import pytz
-
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
+#Path to the S3 bucket holding the live betting odds
+live_betting_odds_folder = f"s3://{s3_bucket_name}/data/intermediate/live_betting_odds"
 
 
-#Project directory locations
-raw = Path.cwd() / "data" / "raw"
-intermediate = Path.cwd() / "data" / "intermediate"
-output = Path.cwd() / "data" / "output"   
-
-#Creating the live betting odds folder in the intermediate folder if it doesn't already exist
-Path(intermediate, "live_betting_odds").mkdir(exist_ok=True)
-live_betting_odds_folder = Path(intermediate, "live_betting_odds")
-
-#TODO= May need to create the inverse of the games so I have the data for both teams in the game
-#TODO= Possibly look into somthing where I caulculate the chnage in odds over the last few dasys in the run up to the game. This can give some idea about the confidence in the teams. (May be a procy for injuries etc)
-
-#NOTE: This needs to be run before the matches hgave started. Otherwise the dates will be off and some odds won't get uploaded.
-
-#This is a free to access subscription levels to the odds api, which allows me to make up to 500 requests per month (https://api.the-odds-api.com/)
-
+#Should maybe use aws secrets manager to store this
 #My personal API key. (Emailed to me when I signed up to the odds api)
 API_KEY = '2884dc7f2d10772d3e86f853ba262963'
 
@@ -218,5 +198,5 @@ else:
 
 
 #Writing to a feather file in the intermediate folder
-all_match_odds.to_feather(f"{live_betting_odds_folder}/all_match_odds.feather")
+wr.s3.to_parquet(all_match_odds, f"{live_betting_odds_folder}/all_match_odds.parquet", index=False)
 

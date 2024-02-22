@@ -1,42 +1,16 @@
 #WebScraping the football data from the website FBref.com. This is a football statistics website.
-# Imports
-# Math and data manipulation imports
-import os
-from pathlib import Path
+#Rewriting to the same file name appears to overwrite the data in the file. I assume it probably deletes the file and then writes the new one.
 
-import pandas as pd  # Package for data manipulation and analysis
-import glob
+#Setting this to be the location of the S3 bucket
+webscraped_football_data_folder = f"s3://{s3_bucket_name}/data/intermediate/webscraped_football_data"
 
-# Web scraping imports
-import requests  # Used to access and download information from websites
-from bs4 import BeautifulSoup # Package for working with html and information parsed using requests
-import time # Package to slow down the webscraping process
 
-import pyarrow.feather as feather   # Package to store dataframes in a binary format
-
-from tqdm import tqdm # Package to show progress bar
-
-#Setting the working directory
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
-
-#Project directory locations
-raw = Path.cwd() / "data" / "raw"
-intermediate = Path.cwd() / "data" / "intermediate"
-output = Path.cwd() / "data" / "output"
-
-Path(intermediate, "webscraped_football_data_no_xg").mkdir(exist_ok=True)
-
-webscraped_football_data_folder = Path(intermediate, "webscraped_football_data_no_xg")
-
-#TODO = Need to set this up so it re-reads in the most seasons of data and overwrites the previous data. But leaves the previous seasons alone.
-
-#Year Variables (getting extra data as I don't think I have enough if only looking back three years)
+#Year Variables
 latest_year = 2024
 earliest_year = 2014 #Theres no npxg at some point back in the data so will probs notread it in
 
 
-reread_data = True #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
+reread_data = False #Change this to True if you want to re-read the data for previous seasons. If you are only updating the most recent season of data then leave as False.
 
 #Re-read all data
 if reread_data :
@@ -45,15 +19,11 @@ else :
     years = list(range(latest_year, latest_year - 1, -1))
 
 #This is the location of the Premier League standings table on the website
-#standings_url = 'https://fbref.com/en/comps/9/Premier-League-Stats'
-
 standings_url = f"https://fbref.com/en/comps/9/{latest_year-1}-{latest_year}/{latest_year-1}-{latest_year}-Premier-League-Stats"
 
 
 #RThis is a list of shooting features that we want to extract from the website
-#shooting_features = ["Date", "Gls" ,"Sh", "SoT", "Dist", "npxG"]
 shooting_features = ["Date", "Gls" ,"Sh", "SoT"]
-
 
 for year in years:
         
@@ -110,26 +80,33 @@ for year in years:
         team_data = team_data.drop(columns=["Time", "Attendance", "Referee", "Round", "Captain", "Match Report", "Formation", "Notes"])
         
         #Saving the data to the intermediate library as a feather file
-        feather.write_feather(df=team_data, dest=f"{webscraped_football_data_folder}/match_data_{team_name}_{year}.feather")
+        #feather.write_feather(df=team_data, dest=f"{webscraped_football_data_folder}/match_data_{team_name}_{year}.feather")
+        
+        #Writing the data to S3 using the awswrangler package
+        wr.s3.to_parquet(df=team_data, path=f"{webscraped_football_data_folder}/match_data_{team_name}_{year}.parquet")
         
         # Adding this team data dataframe to the list of all the teams
         #all_matches.append(team_data)
         time.sleep(10)  # A lot of websites allow scraping but don't want you to do it too quickly, so you don't slow down the website
     
     
+#test read in
+test = wr.s3.read_parquet(f"{webscraped_football_data_folder}/match_data_Manchester City_2024.parquet")
+
 
 #Next I am going to concatenate all the match data files together
 # Start List all the files in the intermediate folder that contain the match data. (Ignoring the combined match data file)
-match_files = glob.glob(f"{webscraped_football_data_folder}/match_data*.feather")
-match_files = [file for file in match_files if "match_data_all_teams.feather" not in file]
+all_files = wr.s3.list_objects(f"{webscraped_football_data_folder}/")
 
-#Concatenating the elements of the all_matches list together. So joining all the teams match data together
-match_data_all_teams = pd.concat([feather.read_feather(file) for file in match_files], axis=0) #Axis=0 to specify that we're concatenating column-wise
+#Filtering the list of files to only include the match data files
+match_files = [file for file in all_files if "match_data" in file and "match_data_all_teams" not in file]
+
+#Concatenating the elements of the all_matches list together. So joining all the teams match data together (This is quite slow now)
+match_data_all_teams = pd.concat([wr.s3.read_parquet(file) for file in match_files], axis=0) #Axis=0 to specify that we're concatenating column-wise
 
 #Convert the column names to lowercase
 match_data_all_teams.columns = [c.lower() for c in match_data_all_teams.columns]
 
-#converting data types of columns in the match_data_all_teams dataframe
 #Converting the date column to a datetime object
 match_data_all_teams["date"] = pd.to_datetime(match_data_all_teams["date"])
 
@@ -144,26 +121,4 @@ match_data_all_teams.drop(columns=["xg", "xga"], inplace=True)
 print(match_data_all_teams.isnull().sum())
 
 #Saving the data to the intermediate library as a feather file
-feather.write_feather(df=match_data_all_teams, dest=f"{webscraped_football_data_folder}/match_data_all_teams.feather")
-
-#Outputting as an Excel file
-match_data_all_teams.to_excel(f"{webscraped_football_data_folder}/match_data_all_teams.xlsx")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+wr.s3.to_parquet(df=match_data_all_teams, path=f"{webscraped_football_data_folder}/match_data_all_teams.parquet")

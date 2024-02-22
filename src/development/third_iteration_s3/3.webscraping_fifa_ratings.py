@@ -1,33 +1,12 @@
-#Imports
-
+"""
+This script webscrapes fifa ratings data from fifaindex.com. 
+The individual datasets are then saved to s3 and then combined into a single dataset.
+    
+"""
 #TODOD: I appear to have some country dataa in here, I think thats from the WC. Need to delete at some point
 
-
-#File management imports
-import os
-from pathlib import Path
-import glob
-
-#Data manipulation imports
-import pandas as pd
-from datetime import datetime
-from dateutil.parser import parse
-#Web scraping imports
-import requests
-from bs4 import BeautifulSoup
-
-#Data storage imports
-import pyarrow.feather as feather
-
-#Project directory locations
-#Setting the working directory
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
-
-
-intermediate = Path.cwd() / "data" / "intermediate"
-webscraped_fifaindex_data = intermediate / "webscraped_fifaindex_data"
-webscraped_fifaindex_data.mkdir(exist_ok=True)
+#Setting this to be the location of the S3 bucket
+webscraped_fifa_data = f"s3://{s3_bucket_name}/data/intermediate/webscraped_fifa_data"
 
 read_all_data = False
 
@@ -41,11 +20,6 @@ def scrape_teams_attributes(year, _start, _end):
     data = []
     
     print(f"Scraping data for FIFA {year}...")
-    # year = 18
-    # _start = 278
-    # _end = 590
-    # update_num = 2
-    
 
     for update_num in range(_start, _end, -1):
         
@@ -63,9 +37,7 @@ def scrape_teams_attributes(year, _start, _end):
         
             # Extract the text content (date value) from the <a> tag
             date_value = specific_a_elements.text.strip()
-    
-    
-    
+
             # Find the table containing team attributes
             table = soup.find('table', class_='table-teams')
 
@@ -98,8 +70,8 @@ def scrape_teams_attributes(year, _start, _end):
     # Create a DataFrame from the collected data
     df = pd.DataFrame(data, columns=['Team Name', 'Att', 'Mid', 'Def', 'Ovr', 'Year', 'Date'])
     
-    #saving data to a permanent location
-    feather.write_feather(df=df, dest=f"{webscraped_fifaindex_data}/fifa_index_{year}.feather")
+    #Saving to s3  
+    wr.s3.to_parquet(df=df, path=f"{webscraped_fifa_data}/fifa_index_{year}.parquet")
     
     return None
 
@@ -159,18 +131,17 @@ for year in years:
     
     #result_dfs.append(result_df)  # Append the result_df to the list
 
+#Listing fifa files
+fifa_index_dfs = wr.s3.list_objects(f"{webscraped_fifa_data}/fifa_index_*.parquet")
+combined_fifa_index = pd.concat([wr.s3.read_parquet(f) for f in fifa_index_dfs], ignore_index=True)
 
-#List of dataframes to concatenate
-fifa_index_dfs = glob.glob(f"{webscraped_fifaindex_data}/fifa_index_*.feather")
-
-combined_fifa_index = pd.concat([pd.read_feather(f) for f in fifa_index_dfs], ignore_index=True)
 #Converting the Date column to datetime
 combined_fifa_index['date'] = combined_fifa_index['Date'].apply(lambda x: parse(x))
 
 #Dropping the Date column
 combined_fifa_index.drop(['Date'], axis=1, inplace=True)
 
-team_list = combined_fifa_index["Team Name"].unique().tolist()
+team_list = combined_fifa_index["Team_Name"].unique().tolist()
 
 country_list = ['Brazil', 'Germany', 'France', 'Spain', 'Argentina', 'Portugal', 'Belgium', 'Italy', 
                 'England', 'Uruguay', 'Poland', 'Croatia', 'Colombia', 'Mexico', 'Netherlands', 'Russia', 
@@ -206,19 +177,20 @@ fifa_index_dfs_all_dates = []
 for team_name in team_list:
     
     #selecting data for a specific team
-    team_df = combined_fifa_index[combined_fifa_index["Team Name"] == team_name]
+    team_df = combined_fifa_index[combined_fifa_index["Team_Name"] == team_name]
     
     #left joining the team_df to the all_dates dataframe
     team_df_all_dates = all_dates.merge(team_df, how="left", on="date")
     
     #filling the miss
-    team_df_all_dates["Team Name"].fillna(method="ffill", inplace=True)
+    team_df_all_dates["Team_Name"].fillna(method="ffill", inplace=True)
     
     #Converting the columns to numeric so they can be interpolated
     cols_to_convert = ['Att', 'Mid', 'Def', 'Ovr']
-    team_df_all_dates[cols_to_convert] = team_df_all_dates[cols_to_convert].apply(pd.to_numeric, errors='coerce')
+    team_df_all_dates[cols_to_convert] = team_df_all_dates[cols_to_convert].astype(float)
     
     #Interpolate the missing data
+
     team_df_all_dates["Att"] = team_df_all_dates["Att"].interpolate(method="linear")
     team_df_all_dates["Mid"] = team_df_all_dates["Mid"].interpolate(method="linear")
     team_df_all_dates["Def"] = team_df_all_dates["Def"].interpolate(method="linear")
@@ -240,4 +212,4 @@ combined_fifa_index_all_dates.drop_duplicates(inplace=True)
 
 combined_fifa_index_all_dates.dropna(inplace=True) 
 
-feather.write_feather(df=combined_fifa_index_all_dates, dest=f"{webscraped_fifaindex_data}/combined_fifa_index.feather")
+wr.s3.to_parquet(df=combined_fifa_index_all_dates, path=f"{webscraped_fifa_data}/combined_fifa_index_all_dates.parquet")

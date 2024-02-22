@@ -2,120 +2,36 @@
     The primary purpose of this script is to prepare the data and create features that the model will use to predict EPL results.
     
     The data outputted form this script will then be passed to the feature selection script, which will determine which features to use in the model. (This won't be used in production though)
-
-    #TODO = squad value (https://www.footballtransfers.com/en/values/teams/most-valuable-teams)
-    #TODO = average percentage of stadium capacity filled
-    #TODO = Sentiment analysis of twitter data (https://www.scraperapi.com/resources/)
-    #TODO = Try ohe the opponent and tyeam in one of the trials. Probably with pipeline to see if it benefits the model.
-    #TODO = Elo weighted past performance of points. 
-    #TODO = Do they do well against these types of teams.Group teams on style. Maybe do some clusteirng on teams to find similar
-    #TODO = Maybe look at how many plyers are traded in and out of the team from fpl. (proxy for ease of games and if players are missing)
-
-    This paper says they get 63% accuracy. They use NLP data from match previews on the guardian https://www.southampton.ac.uk/~sem03/IAAI_2020.pdf
-    
-    #Features that other people have found useful:
-    
-    Baboota and Kaur (2019) - https://arno.uvt.nl/show.cgi?fid=160932
     
     They have found that in general differential features perform better than home and away features. This is because they have better univariate distribution and reduced dimensions
     Their top features include:
         - Form Diff (This is a custome function that they have created. It is essentially a short term form metric)
         - Home Form
         - Away Form
-        - STKPP (Shot on target k games past performance) (Done)
-        - GD Diff (Goal difference differential) (Done)
-        - RelMidField (This si relative midfield strength. This was webscraped from www.fifaindex.com) (Done)
+        - STKPP (Shot on target k games past performance)
+        - GD Diff (Goal difference differential)
+        - RelMidField (This si relative midfield strength. This was webscraped from www.fifaindex.com)
         - CKPP (Corner kick k games past performance)
         - GKPP (Goal kick k games past performance)
-        - ATGD (Away team goal difference) (Done)
-        - HTGD (Home team goal difference) (Done)
+        - ATGD (Away team goal difference)
+        - HTGD (Home team goal difference)
+        - DiffPts (Difference in points) 
         
-
-    #TODO = Features that other people have found useful:
-    #Fifa ratings (Dunno how I would get this data but seems to be important in other models)(https://arno.uvt.nl/show.cgi?fid=160932)
-    #Difference in league position
-    #Home team goal difference (Done)
-    #Away team goal difference (Done)
-    #Difference in points 
-    #Home team points
-    #Away Team Points
-    #percentage of possible points
-    #formation consistency
-    #promotion status
-    #percent of possible points earned moving average (Done)
-    #It appears that differential features may be superior to features for home and away. Thisn is because they have better univariate distribution and reduced dimensions (https://arno.uvt.nl/show.cgi?fid=160932) (baboota and kkaur pdf)
-    #Maybe look into doing all differential columns where I can
-    #TODO = I need to create this form differential that baboota and kaur use (Page 6). If A wins Form(AJ) = Form(Aj-1) + Y(Bj-1)
-    #TODO = Ideally I would have the whole thing in a pipeline so I can see which set up (features, models etc) works best.
-
-#TODO: The web scraping and ELO ratings scripts shouldn't need to be run more than once. I should be able to work from this script only.
-#TODO = Look at how using a window of 3 or 5 affects the model.(Ideally 3 would be better as it would mean less missing values)
-
-#TODO: I think I have some data leakage. I think some of the things like gd and weighted league position are using data from the game thats being played.
-#TODO: Do I want to carry data over from one season to the next. I think I probably shouldn't. AT the momement the points_perc rolling is getting rid of those values but it's gettign rid of quite alot.
-#Think I need to shift them to the values of the previous game. So the current game will be the previous game and the previous game will be the game before that.
-
-
-#TODO: Look at reducing the window sizes so that I can increase the amount of data that I have
-#Use some sort of FPL data. Maybe look at the number of players that are traded in and out of the team.
-#This can be a good proxy for the following:
-#   - If a player is injured
-#   - If a player is suspended
-#   - If the team have a difficult/easy game coming up
-
-https://github.com/vaastav/Fantasy-Premier-League/blob/master/data/2022-23/gws/gw10.csv
-
-
-
-
-https://penaltyblog.readthedocs.io/en/latest/models/dixon_coles.html
-
-https://pena.lt/y/2021/08/25/predicting-football-results-using-bayesian-statistics-with-python-and-pymc3/
 """
-# Imports
-#Path and directory imports
-import os
-from pathlib import Path
-
-#Data manipulation imports
-import pandas as pd  # Package for data manipulation and analysis
-import numpy as np # Package for scientific computing
-from functools import reduce
-from datetime import datetime
-
-#Testing imports
-import pytest # Package for testing code
-
-#Data storage imports
-import pyarrow.feather as feather   # Package to store dataframes in a binary format
-import joblib #Package to save python objects as binary files
-#Setting the working directory
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
-
-
 ####################################
-#Directory and file locations
+#S3 Bucket Locations
 ####################################
-
-#Project directory locations
-raw = Path.cwd() / "data" / "raw"
-intermediate = Path.cwd() / "data" / "intermediate"
-output = Path.cwd() / "data" / "output"
 
 #File locations
-elo_data_folder = Path(intermediate, "elo_data")
-#webscraped_football_data_folder = Path(intermediate, "webscraped_football_data")
-webscraped_football_data_folder = Path(intermediate, "webscraped_football_data_no_xg")
-historical_betting_odds = Path(intermediate, "historical_betting_odds")
-live_betting_odds_folder = Path(intermediate, "live_betting_odds")
-webscraped_fifa_index_data_folder = Path(intermediate, "webscraped_fifaindex_data")
+elo_data_folder = f"s3://{s3_bucket_name}/data/intermediate/elo_data"
+webscraped_football_data_folder = f"s3://{s3_bucket_name}/data/intermediate/webscraped_football_data"
+historical_betting_odds = f"s3://{s3_bucket_name}/data/intermediate/historical_betting_odds"
+live_betting_odds_folder = f"s3://{s3_bucket_name}/data/intermediate/live_betting_odds"
+webscraped_fifa_index_data_folder = f"s3://{s3_bucket_name}/data/intermediate/webscraped_fifa_data"
+combined_betting_data = f"s3://{s3_bucket_name}/data/intermediate/combined_betting_data"
 
 #Window Size
-
 window_size = 3
-#window_size = 5
-
 
 ####################################
 #Loading Data
@@ -128,13 +44,14 @@ window_size = 3
 #   - Live betting odds (Includes betting odds from 2020 to present)
 #   - Team name lookup (This is a lookup table taht aims to give consistency to the team names. As the team names are not consistent across the different datasets)
 
-match_data_all_teams  = pd.read_feather(f"{webscraped_football_data_folder}/match_data_all_teams.feather")
-elo_ratings_all_teams = pd.read_feather(f"{elo_data_folder}/elo_ratings_all_teams.feather")
-historical_betting_all_teams = pd.read_feather(f"{historical_betting_odds}/all_historical_betting_data.feather")
-live_betting_all_teams = pd.read_feather(f"{live_betting_odds_folder}/all_match_odds.feather")
-combined_fifa_index = pd.read_feather(f"{webscraped_fifa_index_data_folder}/combined_fifa_index.feather")
+match_data_all_teams  = wr.s3.read_parquet(f"{webscraped_football_data_folder}/match_data_all_teams.parquet")
+elo_ratings_all_teams = wr.s3.read_parquet(f"{elo_data_folder}/elo_ratings_all_teams.parquet")
+historical_betting_all_teams = wr.s3.read_parquet(f"{historical_betting_odds}/all_historical_betting_data.parquet")
+live_betting_all_teams = wr.s3.read_parquet(f"{live_betting_odds_folder}/all_match_odds.parquet")
+combined_fifa_index = wr.s3.read_parquet(f"{webscraped_fifa_index_data_folder}/ccombined_fifa_index_all_dates.parquet")
 
-team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx").drop_duplicates()
+#Reading in the team name lookup table
+team_name_lookup = wr.s3.read_excel(f"s3://{s3_bucket_name}/data/raw/team_name_lookup/team_name_lookup.xlsx")
 
 #Converting the different date columns to datetime format
 match_data_all_teams['date'] = match_data_all_teams['date'].apply(lambda x: x.date())
@@ -177,7 +94,6 @@ match_data_all_teams["game_id"] = match_data_all_teams.apply(
 #ELO Ratings
 ####################################
 
-#I think theres a chance I'm introducing some data leakage here. By using elo changes that occured on the day. Maybe just shift all the dates back one before joining.
 #Renaming the team names to the full team names that all the other datasets use in the elo_ratings_all_teams dataframe
 elo_ratings_all_teams = elo_ratings_all_teams.merge(team_name_lookup, how="left", left_on="club", right_on="alternate_name")
 
@@ -190,13 +106,9 @@ elo_ratings_all_teams = elo_ratings_all_teams.drop_duplicates()
 #Testing that there are no NaN values in the data
 elo_ratings_all_teams.isnull().sum()
 
-
-
 #Now merging the elo_df_all_dates dataframe to the match_df dataframe
 match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how="left", left_on=["team_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "team_elo_points"}).drop(columns=["elo_team_name"]).drop_duplicates()
 match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how="left", left_on=["opponent_full_name", "date"], right_on=["elo_team_name", "date"]).rename(columns={"elo_points": "opponent_elo_points"}).drop(columns=["elo_team_name"]).drop_duplicates()
-
-
 
 #Dropping the excess name columns
 match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day"], axis=1,   errors="ignore")
@@ -394,10 +306,18 @@ match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lamb
 #Here we are combining the historical data with the live betting data.
 
 #Reading in the betting data
+
+
+if wr.s3.does_object_exist(f"{combined_betting_data}/all_betting_data.feather"):
+    
+    all_betting_data = wr.s3.read_parquet(f"{combined_betting_data}/all_betting_data.feather")
+
 all_betting_data = feather.read_feather(f"{intermediate}/all_betting_data.feather")
 
 #Updating the betting data with any missing historical betting odds and the live betting odds
 all_betting_data = pd.concat([all_betting_data, historical_betting_all_teams, live_betting_all_teams], axis=0, ignore_index=True, join="inner").drop_duplicates(subset=['date', 'home_team_full_name', 'away_team_full_name'],keep='last')
+
+wr.s3.to_parquet(df=all_betting_data, path=f"{intermediate}/all_betting_data.parquet")
 
 feather.write_feather(df=all_betting_data, dest=f"{intermediate}/all_betting_data.feather")
 
@@ -528,9 +448,5 @@ cols_for_model = ["date", "result"] + [col for col in all_football_data.columns 
 all_football_data = all_football_data[cols_for_model]
 
 #Writing the all_football_data dataframe to a feather file. This is essentially my input data for the model
-#feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data.feather")
-#feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential.feather")
-#feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix.feather")
-#feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix.feather")
-feather.write_feather(df=all_football_data, dest=f"{intermediate}/all_football_data_differential_leak_fix_fifa_index.feather")
+wr.s3.to_parquet(df=all_football_data, path=f"{intermediate}/all_football_data.parquet")
 

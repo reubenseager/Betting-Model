@@ -3,51 +3,31 @@ This script is used to create the historical betting odds dataset.
 
 
 """
-#Imports
-#File system management
-import os
-from pathlib import Path  
-
-#Data manipulation
-import pandas as pd
-import glob
-
-#File storage
-import pyarrow.feather as feather   # Package to store dataframes in a binary format
+#Path to the S3 buckets where I am outputting the historical data. I have both raw and intermediate buckets here
+historical_bettings_odds_raw = f"s3://{s3_bucket_name}/data/raw/historical_betting_odds"
+historical_bettings_odds_int = f"s3://{s3_bucket_name}/data/intermediate/historical_betting_odds"
 
 
-#Setting the working directory
-os.getcwd()
-os.chdir("/Users/reubenseager/Data Science Projects/2023/Betting Model")
+#Downloading the latest historical betting data
+football_odds_2324_url = "https://www.football-data.co.uk/mmz4281/2324/E0.csv"
+response = requests.get(football_odds_2324_url)
+data = io.StringIO(response.text)
+hist_odds_2324 = pd.read_csv(data)
 
 
-#Project directory locations
-raw = Path.cwd() / "data" / "raw"
-intermediate = Path.cwd() / "data" / "intermediate"
-output = Path.cwd() / "data" / "output"   
-
-#Creating the historical betting odds folder in the intermediate folder if it doesn't already exist
-Path(intermediate, "historical_betting_odds").mkdir(exist_ok=True)
-
-#Naming the folder location
-historical_betting_odds = intermediate / "historical_betting_odds"
-
-    
-#####################################
-#Historical Betting odds
-#####################################
-
-#From general betting knowledge, I know that Pinacle Sports is the "sharpest" good bookmaker.
+#Saving to the s3 bucket
+wr.s3.to_excel(hist_odds_2324, f"{historical_bettings_odds_raw}/betting_odds_2024.xlsx")
 
 #Listing all the historical betting odds in the raw folder
-historical_betting_odds_files = glob.glob(f"{raw}/historical_betting_odds/betting_odds*.xlsx")
+historical_betting_odds_files = wr.s3.list_objects(f"{historical_bettings_odds_raw}/betting_odds*.xlsx")
 historical_betting_odds_files.sort(reverse=True) #Sorting the files in reverse order so that the most recent file is first in the list
 
 
 def create_betting_data(year_odds):
 
     #Reading in the Excel file 
-    betting_data = pd.read_excel(year_odds)
+    betting_data = wr.s3.read_excel(year_odds)
+    
     #Filtering to bookmakers that also exist in the betting API
     betting_cols = ["Date", "HomeTeam", "AwayTeam", 
                     "PSH", "PSD", "PSA", #Pinnacle
@@ -100,7 +80,8 @@ all_historical_betting_data = all_historical_betting_data.rename(columns={"Date"
 
 
 #Renaming the team names to the full team names that all the other datasets use
-team_name_lookup = pd.read_excel(f"{raw}/team_name_lookup.xlsx")
+team_name_lookup = wr.s3.read_excel(f"s3://{s3_bucket_name}/data/raw/team_name_lookup/team_name_lookup.xlsx")
+
 
 #Merging the team name lookup table with the betting data
 all_historical_betting_data = pd.merge(all_historical_betting_data, team_name_lookup, left_on="home_team", right_on="alternate_name", how="left")
@@ -124,7 +105,7 @@ all_historical_betting_data = all_historical_betting_data[["date", "home_team_fu
 all_historical_betting_data.reset_index(drop=True, inplace=True)
 
 #Writing to a feather file in the intermediate folder
-all_historical_betting_data.to_feather(f"{intermediate}/historical_betting_odds/all_historical_betting_data.feather")
+wr.s3.to_parquet(all_historical_betting_data, f"{historical_bettings_odds_int}/all_historical_betting_data.parquet")
 
 print("Historical betting odds data created successfully!")
 
