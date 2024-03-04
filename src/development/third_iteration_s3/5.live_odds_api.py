@@ -3,13 +3,44 @@ This is a free to access subscription levels to the odds api, which allows me to
 
     
 """
+from botocore.exceptions import ClientError
+
+
+def get_secret():
+
+    secret_name = "odds-api-key"
+    region_name = "us-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    secret = get_secret_value_response['SecretString']
+    
+    return secret
+    # Your code goes here.
+
+test = get_secret()
+
 
 #Path to the S3 bucket holding the live betting odds
 live_betting_odds_folder = f"s3://{s3_bucket_name}/data/intermediate/live_betting_odds"
 
 
 #Should maybe use aws secrets manager to store this
-#My personal API key. (Emailed to me when I signed up to the odds api)
+#My personal API key. (Emailed to me when I signed up to the odds api) (This is whats known as a secret)
 API_KEY = '2884dc7f2d10772d3e86f853ba262963'
 
 #Only interested in the English Premier League at the moment

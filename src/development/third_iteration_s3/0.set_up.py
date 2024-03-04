@@ -80,7 +80,36 @@ s3_client.put_object(Bucket=s3_bucket_name, Key="data/intermediate/live_betting_
 s3_client.put_object(Bucket=s3_bucket_name, Key="data/intermediate/webscraped_football_data/")
 s3_client.put_object(Bucket=s3_bucket_name, Key="data/intermediate/webscraped_fifa_data/")
 s3_client.put_object(Bucket=s3_bucket_name, Key="data/intermediate/combined_betting_data/")
+s3_client.put_object(Bucket=s3_bucket_name, Key="data/intermediate/pre_processed/")
 
 
+#Global variables
+current_season = 2024 #The current season that we are in
+first_season = 2014 #The first season that we are looking at
+window_size = 3 #The window size for the moving average
+#Running the script below
+#1. Webscraping Premier League Data
+from webscraping_epl_data_function import webscraping_epl_data_function
+webscraping_epl_data_function(first_season = first_season, last_season = current_season, reread_data = False, s3_bucket_name = s3_bucket_name)
 
-#1.webscraping_premier_league_data
+#2. Dowbloading ELO Data
+from elo_ratings_api_function import elo_ratings_api_function
+elo_ratings_api_function(s3_bucket_name = s3_bucket_name)
+
+#3. Webscraping Fifa Ratings
+from webscraping_fifa_ratings_function import webscraping_fifa_ratings_function
+webscraping_fifa_ratings_function(reread_data = False, s3_bucket_name = "epl-prediction-model-data")
+
+#4. Downloading Historical Betting Odds
+from historical_betting_odds_function import historical_betting_odds_function
+historical_betting_odds_function(last_season = 2324, reread_data = False, s3_bucket_name = s3_bucket_name)
+
+#5. Downloading Live Betting Odds
+from live_odds_api_function import live_betting_odds_function
+live_betting_odds_function(s3_bucket_name=s3_bucket_name)
+
+#6. Preprocessing the data
+from pre_processing_data_function import pre_processing_function
+pre_processing_function(s3_bucket_name = s3_bucket_name, window_size=window_size)
+
+

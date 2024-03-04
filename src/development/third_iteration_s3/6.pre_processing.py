@@ -29,6 +29,7 @@ historical_betting_odds = f"s3://{s3_bucket_name}/data/intermediate/historical_b
 live_betting_odds_folder = f"s3://{s3_bucket_name}/data/intermediate/live_betting_odds"
 webscraped_fifa_index_data_folder = f"s3://{s3_bucket_name}/data/intermediate/webscraped_fifa_data"
 combined_betting_data = f"s3://{s3_bucket_name}/data/intermediate/combined_betting_data"
+pre_processed_data = f"s3://{s3_bucket_name}/data/intermediate/pre_processed"
 
 #Window Size
 window_size = 3
@@ -112,7 +113,6 @@ match_data_all_teams = match_data_all_teams.merge(elo_ratings_all_teams, how="le
 
 #Dropping the excess name columns
 match_data_all_teams = match_data_all_teams.drop(columns=["gls", "comp", "day"], axis=1,   errors="ignore")
-#complete_data = complete_data.drop(columns=["match_team_names", "elo_team_names", "club", "gls", "index"], axis=1,   errors="ignore")
 
 ####################################
 #Fifa Index Ratings
@@ -175,21 +175,7 @@ match_data_all_teams["points"] = match_data_all_teams["result"].map({"W":3, "D":
 ####################################
 #Current league position
 ####################################
-#Creating a weighted league position column. This gives more weight to positions that are later on in the season
-
-#Calculating the cumulative points for each team up to the current game by season. But excluding the current game
-# match_data_all_teams["cumulative_points"] = match_data_all_teams.groupby(["team_full_name", "season"])["points"].cumsum()
-
-# #Creating a gameweek column. This is the number of games that the team has played in the season. The +1 is there because the first game of the season is gameweek 1 not 0
-# match_data_all_teams["gameweek"] = match_data_all_teams.groupby(["team_full_name", "season"])["points"].cumcount() + 1
-
-# #Creating a current league position column. This the the rank of cumulative points for the specific gameweek and season. If there are two teams with the same number of points, then I'm just giving them the same league position
-# match_data_all_teams["current_league_position"] = match_data_all_teams.groupby(["season", "gameweek"])["cumulative_points"].rank(ascending=False, method="min", pct=False, na_option="keep") 
-
-# #Creating a "weighted" current league position column. This gives more weight to positions that are later on in the season
-# match_data_all_teams["weighted_league_position"] = ((20 - match_data_all_teams["current_league_position"] + 1) * (1 + match_data_all_teams["gameweek"]/38))
-
-
+#Calculating the cumulative points for each team up to the current game by season
 # Calculate the cumulative points excluding the current game
 match_data_all_teams["cumulative_points"] = match_data_all_teams.groupby(["team_full_name", "season"], sort=False)["points"].apply(lambda x: x.shift().cumsum()).values
 
@@ -286,6 +272,7 @@ match_data_all_teams = match_data_all_teams.groupby(["team_full_name", "venue"])
 ####################################
 #Pi-rating
 ####################################
+#Here I am planning on eventuall implementing the pi-rating. This is a rating system that is based on the poisson distribution. It is a more short term form metric that is used in the betting industry. It is essentially a measure of the teams attacking and defensive strength.
 #https://medium.com/@ML_Soccer_Betting/implementing-the-pi-ratings-in-python-d90da10fb070
 
 ####################################
@@ -306,8 +293,6 @@ match_data_all_teams = match_data_all_teams.groupby("team_full_name").apply(lamb
 #Here we are combining the historical data with the live betting data.
 
 #Reading in the betting data
-
-
 if wr.s3.does_object_exist(f"{combined_betting_data}/all_betting_data.feather"):
     
     all_betting_data = wr.s3.read_parquet(f"{combined_betting_data}/all_betting_data.feather")
@@ -414,10 +399,6 @@ for col in differential_cols:
 #Dropping the non-differential columns. These are the columns that start with home_and_away_cols and end with _home_team or _away_team
 home_and_away_cols_to_drop = [col for col in all_football_data.columns if col.startswith(tuple(home_and_away_cols)) and not (col.startswith("team_full_name") or col.endswith("differential"))]
 
-#all_football_data = all_football_data.drop(columns=home_and_away_cols_to_drop)
-#going to try not doing any feature selection and just using all the columns
-
-
 #Checking the data types of the all_football_data dataframe
 all_football_data.dtypes
 
@@ -448,5 +429,5 @@ cols_for_model = ["date", "result"] + [col for col in all_football_data.columns 
 all_football_data = all_football_data[cols_for_model]
 
 #Writing the all_football_data dataframe to a feather file. This is essentially my input data for the model
-wr.s3.to_parquet(df=all_football_data, path=f"{intermediate}/all_football_data.parquet")
+wr.s3.to_parquet(df=all_football_data, path=f"{pre_processed_data}/all_football_data.parquet")
 
